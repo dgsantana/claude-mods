@@ -1,6 +1,7 @@
 // The `statusline` section of config.json, sanitised so the status line
 // always has a usable layout whatever the files say.
 
+import { getPath } from './config-patch'
 import { ICON_SETS, PATH_STYLES, SEGMENT_IDS, SEPARATORS, type SegmentId, settingsFor, validate } from './settings-schema'
 
 export type StatuslineConfig = {
@@ -17,15 +18,6 @@ export type StatuslineConfig = {
 
 const PREFIX = 'statusline.'
 
-function getIn(obj: unknown, path: string[]): unknown {
-  let cur = obj
-  for (const p of path) {
-    if (typeof cur !== 'object' || cur === null || Array.isArray(cur)) return undefined
-    cur = (cur as Record<string, unknown>)[p]
-  }
-  return cur
-}
-
 export function sanitizeStatusline(raw: unknown): { config: StatuslineConfig; warnings: string[] } {
   const warnings: string[] = []
   const isObject = typeof raw === 'object' && raw !== null && !Array.isArray(raw)
@@ -35,7 +27,7 @@ export function sanitizeStatusline(raw: unknown): { config: StatuslineConfig; wa
 
   for (const s of settingsFor('statusline')) {
     const path = s.key.slice(PREFIX.length).split('.')
-    let value = isObject ? getIn(raw, path) : undefined
+    let value = isObject ? getPath(raw, path.join('.')) : undefined
     if (s.kind === 'segments' && Array.isArray(value)) {
       const known: readonly unknown[] = SEGMENT_IDS
       const kept: SegmentId[] = []
