@@ -1,0 +1,11 @@
+{
+  "name": "omp-port",
+  "version": "0.1.0",
+  "description": "oh-my-pi features for Claude Code: TTSR, layered rules, AGENTS.md, APPEND_SYSTEM, advisor",
+  "types": "./types/index.d.ts",
+  "author": {
+    "name": "Daniel Santana"
+  },
+  "license": "MIT",
+  "repository": "https://github.com/dgsantana/claude-mods"
+}

@@ -1,0 +1,16 @@
+{
+  "name": "dgsantana",
+  "owner": {
+    "name": "dgsantana"
+  },
+  "plugins": [
+    {
+      "name": "omp-port",
+      "source": "./plugins/omp-port",
+      "description": "oh-my-pi features for Claude Code: TTSR, layered rules, AGENTS.md, APPEND_SYSTEM, advisor"
+    }
+  ],
+  "metadata": {
+    "description": "dgsantana's Claude Code mods"
+  }
+}
