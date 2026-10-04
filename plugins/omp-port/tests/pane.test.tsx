@@ -110,3 +110,79 @@ test('mobile surface (no Input/Select) gets a note instead of controls', async (
   const pane = await $.ui.mount({ ...PANE, surface: 'mobile' })
   expect(await pane.find({ text: /terminal or desktop/ })).toBeDefined()
 })
+
+type Node = { type?: string; props?: Record<string, unknown>; children?: unknown[] }
+function texts(tree: unknown, out: Node[] = []): Node[] {
+  if (tree && typeof tree === 'object') {
+    const n = tree as Node
+    if (n.type === 'Text') out.push(n)
+    for (const c of n.children ?? []) texts(c, out)
+  }
+  return out
+}
+const textOf = (n: Node): string => (n.children ?? []).map(c => (typeof c === 'string' ? c : '')).join('')
+
+test('segments editor: up, remove and add write the list', async ($, on) => {
+  const w = world(on, { themes: THEMES, files: { [GLOBAL]: '{"statusline":{"left":["model","path","git"]}}' } })
+  mock.store(on, {})
+  on('ui.render', () => null as never)
+  const pane = await $.ui.mount(PANE)
+  await pane.press({ key: 'seg-statusline.left-path-up' })
+  expect(JSON.parse(w.writes[GLOBAL] ?? '{}').statusline.left).toEqual(['path', 'model', 'git'])
+  await pane.press({ key: 'seg-statusline.left-git-remove' })
+  expect(JSON.parse(w.writes[GLOBAL] ?? '{}').statusline.left).toEqual(['path', 'model'])
+  await pane.select({ key: 'seg-statusline.left-add', value: 'pr' })
+  expect(JSON.parse(w.writes[GLOBAL] ?? '{}').statusline.left).toEqual(['path', 'model', 'pr'])
+})
+
+test('preview follows the layout and recolours with the theme', async ($, on) => {
+  world(on, {
+    themes: { dark: { statusLineModel: '#111111' }, 'dark-nord': { statusLineModel: '#222222' } },
+    files: { [GLOBAL]: '{"statusline":{"left":["path","model"],"right":["cost"]}}' },
+  })
+  mock.store(on, {})
+  on('ui.render', () => null as never)
+  const pane = await $.ui.mount(PANE)
+  let all = texts(await pane.drawn())
+  const order = ['project', 'Opus', '$0.42'].map(s => all.findIndex(t => textOf(t).includes(s)))
+  expect(order.every((v, i, a) => v >= 0 && (i === 0 || v > (a[i - 1] ?? -1)))).toBe(true)
+  expect(all.find(t => textOf(t).includes('Opus'))?.props?.color).toBe('#111111')
+  await pane.select({ key: 'set-statusline.theme', value: 'dark-nord' })
+  all = texts(await pane.drawn())
+  expect(all.find(t => textOf(t).includes('Opus'))?.props?.color).toBe('#222222')
+})
+
+test('rules tab lists rules with kind; toggling writes rules.disabled', async ($, on) => {
+  const w = world(on, {
+    themes: THEMES,
+    files: {
+      '/home/u/.agents/rules/alpha.md': '---\nalwaysApply: true\n---\nA',
+      '/home/u/.agents/rules/beta.md': '---\ncondition: x\n---\nB',
+    },
+  })
+  mock.store(on, {})
+  on('ui.render', () => null as never)
+  const pane = await $.ui.mount(PANE)
+  await pane.press({ key: 'tab-rules' })
+  expect(await pane.find({ text: /alpha.*always/ })).toBeDefined()
+  expect(await pane.find({ text: /beta.*ttsr/ })).toBeDefined()
+  await pane.press({ key: 'rule-beta' })
+  expect(JSON.parse(w.writes[GLOBAL] ?? '{}').rules.disabled).toEqual(['beta'])
+  await pane.press({ key: 'rule-beta' })
+  expect(JSON.parse(w.writes[GLOBAL] ?? '{}').rules.disabled).toEqual([])
+})
+
+test('advisor tab: spend shown, reset spend, budget goes to the store', async ($, on) => {
+  const w = world(on, { themes: THEMES })
+  mock.store(on, { 'advisor.totalUsd': 1.5 })
+  on('ui.render', () => null as never)
+  const pane = await $.ui.mount(PANE)
+  await pane.press({ key: 'tab-advisor' })
+  expect(await pane.find({ text: /total \$1\.500/ })).toBeDefined()
+  await pane.press({ key: 'advisor-reset-spend' })
+  await pane.input({ key: 'set-advisor.budgetUsd', text: '3' })
+  expect(Object.keys(w.writes)).toEqual([])
+  const status = (await $.command.run({ command: 'advisor', args: 'status' } as never)).text ?? ''
+  expect(status).toContain('$3.00')
+  expect(status).toContain('total $0.000')
+})

@@ -6,11 +6,12 @@ import { costUsd, parseVerdict, priceOrFallback, reviewPrompt } from './advisor'
 import { addAgentsMd } from './agentsmd'
 import { setPath, unsetPath } from './config-patch'
 import { discover, homeDir, type Io, type Snapshot } from './load'
-import { paneRows, parseListInput, projectLayerDir } from './pane-model'
+import { paneRows, parseListInput, previewSegments, projectLayerDir, rulesRows, segmentsEdit } from './pane-model'
 import { isWindowsPath, join } from './paths'
 import { renderRulesSection } from './rules'
-import { SETTINGS, type Setting, TABS, type Tab, validate } from './settings-schema'
-import { listThemes } from './themes'
+import { SEGMENT_IDS, type SegmentId, SETTINGS, type Setting, TABS, type Tab, validate } from './settings-schema'
+import { sanitizeStatusline, type StatuslineConfig } from './statusline-config'
+import { listThemes, resolveTheme } from './themes'
 import {
   astTargets,
   type Candidate,
@@ -417,6 +418,64 @@ async function setScope($: EngineInterface, scope: 'global' | 'project'): Promis
   await $.state.set(PANE_SCOPE, scope)
 }
 
+// The tab-specific block above the settings rows: the status line preview,
+// the rule list, the advisor's spend.
+async function paneExtras(
+  $: EngineInterface,
+  tab: Tab,
+  snap: Snapshot,
+  statusline: StatuslineConfig,
+  builtin: Record<string, Record<string, string>>,
+  e: Parameters<EngineInterface['ui']['resolve']>[0],
+) {
+  const { Box, Button, Text } = $.ui.resolve(e)
+  if (tab === 'statusline') {
+    const theme = resolveTheme(statusline.theme, builtin, snap.themeSpecs).theme
+    return (
+      <Box gap={1} flexWrap="wrap">
+        <Text dimColor>preview</Text>
+        {previewSegments(statusline, theme).map(seg => (
+          <Text color={seg.colour}>{seg.text}</Text>
+        ))}
+      </Box>
+    )
+  }
+  if (tab === 'rules') {
+    const disabledSetting = SETTINGS.find(s => s.key === 'rules.disabled') as Setting
+    const disabled = snap.config.rules.disabled
+    return (
+      <Box flexDirection="column">
+        {rulesRows(snap.allRules, snap.config.rules).map(r => (
+          <Box key={`rulerow-${r.name}`} gap={1}>
+            <Button
+              key={`rule-${r.name}`}
+              label={r.disabled ? '[ ]' : '[x]'}
+              plain
+              onPress={() =>
+                writeSetting($, disabledSetting, disabled.includes(r.name) ? disabled.filter(n => n !== r.name) : [...disabled, r.name])
+              }
+            />
+            <Text dimColor={r.disabled}>{`${r.name}  ${r.kind} · ${r.source}`}</Text>
+          </Box>
+        ))}
+      </Box>
+    )
+  }
+  if (tab === 'advisor') {
+    const session = (await $.state.get(SESSION_USD)).value ?? 0
+    const total = await $.store.get('advisor.totalUsd')
+    const lastError = (await $.state.get(LAST_ERROR)).value
+    return (
+      <Box gap={1}>
+        <Text>{`spent: session $${session.toFixed(3)}, total $${(typeof total === 'number' ? total : 0).toFixed(3)}`}</Text>
+        <Button key="advisor-reset-spend" label="Reset spend" onPress={() => $.store.set('advisor.totalUsd', 0)} />
+        {lastError ? <Text color="red">{`last review failed: ${lastError}`}</Text> : null}
+      </Box>
+    )
+  }
+  return null
+}
+
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     cached = undefined
@@ -463,7 +522,10 @@ export const register: Register = on => {
     }
     const targets = await paneTargets($, snap)
     const rows = paneRows(tab, snap, await storeValues($))
-    const themes = listThemes(await builtinThemes($), snap.themeSpecs)
+    const builtin = await builtinThemes($)
+    const themes = listThemes(builtin, snap.themeSpecs)
+    const statusline = sanitizeStatusline(snap.config.statusline).config
+    const extra = await paneExtras($, tab, snap, statusline, builtin, e)
 
     const control = (s: Setting, value: unknown) => {
       const key = `set-${s.key}`
@@ -477,7 +539,32 @@ export const register: Register = on => {
             <Select key={key} options={options.map(o => ({ value: o }))} value={String(value)} onSelect={(v: string) => writeSetting($, s, v)} />
           )
         }
-        case 'segments':
+        case 'segments': {
+          const list = (Array.isArray(value) ? value : []) as SegmentId[]
+          const used = new Set([...statusline.left, ...statusline.right])
+          const free = SEGMENT_IDS.filter(id => !used.has(id))
+          const edit = (op: Parameters<typeof segmentsEdit>[1]) => writeSetting($, s, segmentsEdit(list, op))
+          return (
+            <Box key={key} gap={1} flexWrap="wrap">
+              {list.map(id => (
+                <Box key={`seg-${s.key}-${id}`}>
+                  <Text>{id}</Text>
+                  <Button key={`seg-${s.key}-${id}-up`} label="↑" plain onPress={() => edit({ up: id })} />
+                  <Button key={`seg-${s.key}-${id}-down`} label="↓" plain onPress={() => edit({ down: id })} />
+                  <Button key={`seg-${s.key}-${id}-remove`} label="✕" plain onPress={() => edit({ remove: id })} />
+                </Box>
+              ))}
+              {free.length > 0 ? (
+                <Select
+                  key={`seg-${s.key}-add`}
+                  label="+ add"
+                  options={free.map(id => ({ value: id }))}
+                  onSelect={(v: string) => edit({ add: v as SegmentId })}
+                />
+              ) : null}
+            </Box>
+          )
+        }
         case 'stringList':
           return (
             <Input
@@ -516,6 +603,7 @@ export const register: Register = on => {
           />
           <Text dimColor>{(scope === 'project' ? targets.project : targets.global) ?? ''}</Text>
         </Box>
+        {extra}
         {rows.map(row => (
           <Box key={`row-${row.setting.key}`} flexDirection="column">
             <Box gap={1}>

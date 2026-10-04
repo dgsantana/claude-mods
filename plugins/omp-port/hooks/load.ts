@@ -21,6 +21,8 @@ export type Snapshot = {
   configLayers: ConfigLayer[]
   themeSpecs: Record<string, ThemeSpec>
   rules: Rule[]
+  // Every discovered rule before `rules.disabled` / `rules.builtin` apply (the pane lists them).
+  allRules: Rule[]
   append: string
   layers: Layer[]
   warnings: string[]
@@ -102,6 +104,7 @@ export async function discover(
     configLayers,
     themeSpecs,
     rules: mergeRules(ruleLayers, config),
+    allRules: mergeRules(ruleLayers, { ...config, rules: { builtin: true, disabled: [] } }),
     append: mergeAppend(appends),
     layers,
     warnings,
