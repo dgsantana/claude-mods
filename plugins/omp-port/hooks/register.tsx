@@ -2,6 +2,7 @@
 // this file, so every call on `$` lives here; the logic it feeds is imported.
 
 import type { EngineInterface, Register } from 'claude-code'
+import { costUsd, parseVerdict, priceFor, reviewPrompt } from './advisor'
 import { addAgentsMd } from './agentsmd'
 import { discover, homeDir, type Io, type Snapshot } from './load'
 import { isWindowsPath, join } from './paths'
@@ -177,15 +178,172 @@ async function ttsr($: EngineInterface, e: { tool: string }, run: () => Promise<
   return { ...result, context: [...(result.context ?? []), remind.join('\n\n')] }
 }
 
+// Advisor: reviews turns that edited files; the person accepts or ignores
+// its note before the next prompt. Settings live in $.store over config.
+const EDITS = { plugin: 'omp-port', key: 'advisorEdits' } as const
+const NOTE = { plugin: 'omp-port', key: 'advisorNote' } as const
+const DECISION = { plugin: 'omp-port', key: 'advisorDecision' } as const
+const SESSION_USD = { plugin: 'omp-port', key: 'advisorSessionUsd' } as const
+
+type AdvisorSettings = { enabled: boolean; model?: string; budgetUsd?: number; totalUsd: number }
+
+async function advisorSettings($: EngineInterface): Promise<AdvisorSettings> {
+  let cfg = { enabled: false } as { enabled: boolean; model?: string; budgetUsd?: number }
+  try {
+    cfg = (await snapshot($)).config.advisor
+  } catch {}
+  const enabled = await $.store.get('advisor.enabled')
+  const model = await $.store.get('advisor.model')
+  const budget = await $.store.get('advisor.budgetUsd')
+  const total = await $.store.get('advisor.totalUsd')
+  return {
+    enabled: typeof enabled === 'boolean' ? enabled : cfg.enabled,
+    model: typeof model === 'string' && model !== '' ? model : cfg.model,
+    budgetUsd: typeof budget === 'number' ? budget : cfg.budgetUsd,
+    totalUsd: typeof total === 'number' ? total : 0,
+  }
+}
+
+async function trackEdit($: EngineInterface, e: { file_path?: unknown; agentId?: string }, r: ToolAnswer): Promise<void> {
+  if (e.agentId !== undefined || r.deny !== undefined || r.isError === true || typeof e.file_path !== 'string') return
+  const held = await $.state.get(EDITS)
+  const edits = held.value ?? []
+  if (!edits.includes(e.file_path)) await $.state.set(EDITS, [...edits, e.file_path])
+}
+
+async function advisorReview($: EngineInterface, files: string[], answer: string): Promise<void> {
+  const s = await advisorSettings($)
+  if (!s.enabled || (s.budgetUsd !== undefined && s.totalUsd >= s.budgetUsd)) return
+  const r = s.model
+    ? await $.model.complete({ model: s.model, prompt: reviewPrompt(files, answer) })
+    : await $.model.fork({ prompt: reviewPrompt(files) })
+
+  if ('usage' in r) {
+    let prices = {}
+    try {
+      prices = (await snapshot($)).config.advisor.prices
+    } catch {}
+    const price = priceFor(s.model ?? (await $.session.model()), prices)
+    const cost = price ? costUsd(r.usage, price) : 0
+    if (!price) $.ui.log('omp-port: advisor has no price for this model; spend not counted (set advisor.prices in config)')
+    const total = s.totalUsd + cost
+    await $.store.set('advisor.totalUsd', total)
+    const session = await $.state.get(SESSION_USD)
+    await $.state.set(SESSION_USD, (session.value ?? 0) + cost)
+    if (s.budgetUsd !== undefined && total >= s.budgetUsd) {
+      await $.store.set('advisor.enabled', false)
+      $.ui.toast(`Advisor off: budget $${s.budgetUsd.toFixed(2)} reached ($${total.toFixed(3)} spent)`)
+    }
+  }
+
+  if (!r.isAnswered) {
+    $.ui.log(`omp-port: advisor got no review (${r.reason})`)
+    return
+  }
+  const verdict = parseVerdict(r.text)
+  if (verdict.ok) return
+  await $.state.set(NOTE, verdict.note)
+  await $.state.set(DECISION, 'accept')
+  $.ui.toast(`Advisor: ${verdict.note}`)
+}
+
+async function advisorCommand($: EngineInterface, args: string): Promise<string> {
+  const [verb = 'status', ...rest] = args.trim().split(/\s+/).filter(Boolean)
+  const value = rest.join(' ')
+  switch (verb) {
+    case 'on':
+      await $.store.set('advisor.enabled', true)
+      return 'Advisor on.'
+    case 'off':
+      await $.store.set('advisor.enabled', false)
+      return 'Advisor off.'
+    case 'model':
+      if (value === '' || value === 'default') await $.store.delete('advisor.model')
+      else await $.store.set('advisor.model', value)
+      return value === '' || value === 'default' ? 'Advisor model: session model (fork).' : `Advisor model: ${value}.`
+    case 'budget': {
+      const usd = Number(value)
+      if (value === '' || value === 'none') {
+        await $.store.delete('advisor.budgetUsd')
+        return 'Advisor budget removed.'
+      }
+      if (!Number.isFinite(usd) || usd < 0) return `Not a budget: ${value}`
+      await $.store.set('advisor.budgetUsd', usd)
+      return `Advisor budget: $${usd.toFixed(2)}.`
+    }
+    case 'reset':
+      await $.store.set('advisor.totalUsd', 0)
+      return 'Advisor spend reset.'
+    case 'status': {
+      const s = await advisorSettings($)
+      const session = (await $.state.get(SESSION_USD)).value ?? 0
+      return [
+        `Advisor ${s.enabled ? 'on' : 'off'}`,
+        `model: ${s.model ?? 'session model (fork)'}`,
+        `budget: ${s.budgetUsd !== undefined ? `$${s.budgetUsd.toFixed(2)}` : 'none'}`,
+        `spent: session $${session.toFixed(3)}, total $${s.totalUsd.toFixed(3)}`,
+      ].join(' · ')
+    }
+    default:
+      return 'Usage: /advisor on|off|status|model <id|default>|budget <usd|none>|reset'
+  }
+}
+
 export const register: Register = on => {
-  on('session.start', ($, e, next) => {
+  on('session.start', async ($, e, next) => {
     cached = undefined
+    await $.command.register({
+      name: 'advisor',
+      description: 'Advisor review of edit turns: on, off, status, model, budget',
+      argumentHint: 'on|off|status|model <id>|budget <usd>',
+    })
     return next(e)
   })
 
-  on('turn.start', ($, e, next) => {
+  on('turn.start', async ($, e, next) => {
     cached = undefined
+    await $.state.set(EDITS, [])
     return next(e)
+  })
+
+  on('command.run', { command: 'advisor' }, async ($, e) => ({ text: await advisorCommand($, e.args) }))
+
+  on('prompt.submit', async ($, e, next) => {
+    const note = (await $.state.get(NOTE)).value
+    if (!note) return next(e)
+    const decision = (await $.state.get(DECISION)).value ?? 'accept'
+    await $.state.set(NOTE, null)
+    if (decision === 'ignore') return next(e)
+    const block = `<advisor-note>\nA reviewer looked at your last edits and flagged:\n${note}\n</advisor-note>`
+    return next({ ...e, context: [...(e.context ?? []), block] })
+  })
+
+  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    const note = (await $.state.get(NOTE)).value
+    if (!note) return next(e)
+    const decision = (await $.state.get(DECISION)).value ?? 'accept'
+    const { Box, Button, Text } = $.ui.resolve(e)
+    return (
+      <Box flexDirection="column">
+        <Text>
+          <Text bold color="warning">Advisor: </Text>
+          {note}
+        </Text>
+        <Box>
+          <Button
+            key="advisor-accept"
+            label={decision === 'accept' ? '✓ Send with next prompt' : 'Send with next prompt'}
+            onPress={() => $.state.set(DECISION, 'accept')}
+          />
+          <Text> </Text>
+          <Button
+            key="advisor-ignore"
+            label={decision === 'ignore' ? '✓ Ignore' : 'Ignore'}
+            onPress={() => $.state.set(DECISION, 'ignore')}
+          />
+        </Box>
+      </Box>
+    )
   })
 
   on('prompt.compose', async ($, e, next) => {
@@ -230,10 +388,27 @@ export const register: Register = on => {
       const state = held.value ?? newRepeatState()
       onTurnEnd(state)
       await $.state.set(REPEAT, state)
+      const edits = (await $.state.get(EDITS)).value ?? []
+      if (!e.isAborted && edits.length > 0) {
+        await $.state.set(EDITS, [])
+        const answer = e.answer
+        // Outside this dispatch, so the review never holds up the turn.
+        $.clock.after(0, () => {
+          advisorReview($, edits, answer).catch(err => $.ui.log(`omp-port: advisor failed (${errText(err)})`))
+        })
+      }
     }
     return next(e)
   })
 
-  on('tool.call', { tool: 'Edit' }, ($, e, next) => ttsr($, e, () => next(e)))
-  on('tool.call', { tool: 'Write' }, ($, e, next) => ttsr($, e, () => next(e)))
+  on('tool.call', { tool: 'Edit' }, async ($, e, next) => {
+    const r = await ttsr($, e, () => next(e))
+    await trackEdit($, e, r)
+    return r
+  })
+  on('tool.call', { tool: 'Write' }, async ($, e, next) => {
+    const r = await ttsr($, e, () => next(e))
+    await trackEdit($, e, r)
+    return r
+  })
 }
