@@ -44,12 +44,13 @@ function ioFrom($: EngineInterface): Io {
         return undefined
       }
     },
-    listMarkdown: async dir => {
+    listFiles: async (dir, ext) => {
       try {
         if (!(await $.fs.exists(dir))) return []
         const entries = await $.fs.list(dir)
+        const wanted = ext === '.md' ? /\.mdc?$/i : /\.json$/i
         return entries
-          .filter(e => e.kind === 'file' && /\.mdc?$/i.test(e.name))
+          .filter(e => e.kind === 'file' && wanted.test(e.name))
           .map(e => e.name)
           .sort()
       } catch {

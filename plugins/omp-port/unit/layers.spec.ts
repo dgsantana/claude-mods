@@ -65,10 +65,10 @@ function fakeIo(files: Record<string, string>, env: Record<string, string | unde
   return {
     env: async name => env[name],
     read: async p => map.get(norm(p)),
-    listMarkdown: async dir => {
+    listFiles: async (dir, ext) => {
       const d = norm(dir) + '/'
       return [...map.keys()]
-        .filter(k => k.startsWith(d) && !k.slice(d.length).includes('/') && /\.mdc?$/.test(k))
+        .filter(k => k.startsWith(d) && !k.slice(d.length).includes('/') && (ext === '.md' ? /\.mdc?$/.test(k) : k.endsWith(ext)))
         .map(k => k.slice(d.length))
         .sort()
     },
@@ -125,5 +125,37 @@ describe('discover', () => {
     const io = fakeIo({ '/home/d/.agents/rules/bad.md': '---\nscope: "a","b"\n---\nx' }, { HOME: '/home/d' })
     const snap = await discover(io, { builtinDir, root: '/r', cwd: '/r' })
     expect(snap.warnings.some(w => w.includes('bad.md'))).toBe(true)
+  })
+})
+
+describe('discover: config layers and custom themes', () => {
+  const builtinDir = '/plugin/builtin-rules'
+  test('configLayers lists each parsed config.json, low to high', async () => {
+    const io = fakeIo({
+      '/home/d/.agents/mods/config.json': '{"statusline":{"theme":"g"}}',
+      '/repo/.agents/mods/config.json': '{"statusline":{"theme":"p"}}',
+    }, { HOME: '/home/d' })
+    const snap = await discover(io, { builtinDir, root: '/repo', cwd: '/repo' })
+    expect(snap.configLayers.map(l => [l.source, l.dir, l.value])).toEqual([
+      ['global', '/home/d/.agents', { statusline: { theme: 'g' } }],
+      ['project', '/repo/.agents', { statusline: { theme: 'p' } }],
+    ])
+    expect(snap.config.statusline.theme).toBe('p')
+  })
+  test('custom themes from every layer; project overrides global by name', async () => {
+    const io = fakeIo({
+      '/home/d/.agents/mods/themes/mine.json': '{"colors":{"statusLineModel":"#000001"}}',
+      '/home/d/.agents/mods/themes/other.json': '{"colors":{}}',
+      '/repo/.agents/mods/themes/mine.json': '{"extends":"dark","colors":{"statusLineModel":"#000002"}}',
+    }, { HOME: '/home/d' })
+    const snap = await discover(io, { builtinDir, root: '/repo', cwd: '/repo' })
+    expect(Object.keys(snap.themeSpecs).sort()).toEqual(['mine', 'other'])
+    expect(snap.themeSpecs.mine?.colors.statusLineModel).toBe('#000002')
+  })
+  test('invalid theme json is skipped with a warning', async () => {
+    const io = fakeIo({ '/home/d/.agents/mods/themes/bad.json': '{nope' }, { HOME: '/home/d' })
+    const snap = await discover(io, { builtinDir, root: '/r', cwd: '/r' })
+    expect(snap.themeSpecs).toEqual({})
+    expect(snap.warnings.some(w => w.includes('bad.json'))).toBe(true)
   })
 })

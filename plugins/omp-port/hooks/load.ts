@@ -4,21 +4,38 @@
 import { type Config, mergeAppend, mergeConfig, mergeRules } from './layers'
 import { chainBetween, join, samePath } from './paths'
 import { type Rule, type RuleSource, ruleFromMarkdown } from './rule'
+import type { ThemeSpec } from './themes'
 
 export type Io = {
   env: (name: 'HOME' | 'USERPROFILE') => Promise<string | undefined>
   read: (path: string) => Promise<string | undefined>
-  listMarkdown: (dir: string) => Promise<string[]>
+  listFiles: (dir: string, ext: '.md' | '.json') => Promise<string[]>
 }
 
 export type Layer = { source: RuleSource; dir: string }
 
+export type ConfigLayer = { source: RuleSource; dir: string; value: unknown }
+
 export type Snapshot = {
   config: Config
+  configLayers: ConfigLayer[]
+  themeSpecs: Record<string, ThemeSpec>
   rules: Rule[]
   append: string
   layers: Layer[]
   warnings: string[]
+}
+
+// The global layer, then one project layer per directory from root down to
+// cwd, skipping home (already the global layer).
+export function layerDirs(home: string | undefined, root: string, cwd: string): Layer[] {
+  const layers: Layer[] = []
+  if (home) layers.push({ source: 'global', dir: join(home, '.agents') })
+  for (const dir of chainBetween(root, cwd)) {
+    if (home && samePath(dir, home)) continue
+    layers.push({ source: 'project', dir: join(dir, '.agents') })
+  }
+  return layers
 }
 
 export async function homeDir(io: Io): Promise<string | undefined> {
@@ -27,7 +44,7 @@ export async function homeDir(io: Io): Promise<string | undefined> {
 
 async function loadRules(io: Io, dir: string, source: RuleSource, warnings: string[]): Promise<Rule[]> {
   const rules: Rule[] = []
-  for (const name of await io.listMarkdown(dir)) {
+  for (const name of await io.listFiles(dir, '.md')) {
     const path = join(dir, name)
     const text = await io.read(path)
     if (text === undefined) continue
@@ -44,15 +61,11 @@ export async function discover(
 ): Promise<Snapshot> {
   const warnings: string[] = []
   const home = await homeDir(io)
-  const layers: Layer[] = [{ source: 'builtin', dir: where.builtinDir }]
-  if (home) layers.push({ source: 'global', dir: join(home, '.agents') })
-  for (const dir of chainBetween(where.root, where.cwd)) {
-    if (home && samePath(dir, home)) continue
-    layers.push({ source: 'project', dir: join(dir, '.agents') })
-  }
+  const layers: Layer[] = [{ source: 'builtin', dir: where.builtinDir }, ...layerDirs(home, where.root, where.cwd)]
 
   const ruleLayers: Rule[][] = []
-  const configs: unknown[] = []
+  const configLayers: ConfigLayer[] = []
+  const themeSpecs: Record<string, ThemeSpec> = {}
   const appends: string[] = []
   for (const layer of layers) {
     if (layer.source === 'builtin') {
@@ -64,15 +77,33 @@ export async function discover(
     const cfgText = await io.read(cfgPath)
     if (cfgText !== undefined) {
       try {
-        configs.push(JSON.parse(cfgText))
+        configLayers.push({ source: layer.source, dir: layer.dir, value: JSON.parse(cfgText) })
       } catch (err) {
         warnings.push(`${cfgPath}: invalid config.json (${err instanceof Error ? err.message : err})`)
       }
     }
     const append = await io.read(join(layer.dir, 'mods', 'APPEND_SYSTEM.md'))
     if (append !== undefined) appends.push(append)
+    const themesDir = join(layer.dir, 'mods', 'themes')
+    for (const file of await io.listFiles(themesDir, '.json')) {
+      const path = join(themesDir, file)
+      try {
+        const spec = JSON.parse((await io.read(path)) ?? '') as ThemeSpec
+        themeSpecs[file.replace(/\.json$/i, '')] = { ...spec, colors: spec.colors ?? {} }
+      } catch (err) {
+        warnings.push(`${path}: invalid theme (${err instanceof Error ? err.message : err})`)
+      }
+    }
   }
 
-  const config = mergeConfig(configs)
-  return { config, rules: mergeRules(ruleLayers, config), append: mergeAppend(appends), layers, warnings }
+  const config = mergeConfig(configLayers.map(l => l.value))
+  return {
+    config,
+    configLayers,
+    themeSpecs,
+    rules: mergeRules(ruleLayers, config),
+    append: mergeAppend(appends),
+    layers,
+    warnings,
+  }
 }
