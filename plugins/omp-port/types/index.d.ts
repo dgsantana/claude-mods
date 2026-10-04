@@ -1,7 +1,10 @@
-export type Placeholder = never
+export type RepeatSnapshot = { turn: number; injectedAt: Record<string, number> }
 
 declare module 'claude-code' {
   interface PluginState {
-    'omp-port': {}
+    'omp-port': {
+      ttsrRepeat: RepeatSnapshot
+      astGrepHinted: boolean
+    }
   }
 }
