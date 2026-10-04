@@ -2,7 +2,7 @@
 // this file, so every call on `$` lives here; the logic it feeds is imported.
 
 import type { EngineInterface, Register } from 'claude-code'
-import { costUsd, parseVerdict, priceFor, reviewPrompt } from './advisor'
+import { costUsd, parseVerdict, priceOrFallback, reviewPrompt } from './advisor'
 import { addAgentsMd } from './agentsmd'
 import { discover, homeDir, type Io, type Snapshot } from './load'
 import { isWindowsPath, join } from './paths'
@@ -22,6 +22,15 @@ import {
 } from './ttsr-match'
 
 const errText = (err: unknown) => (err instanceof Error ? err.message : String(err))
+
+// Warnings repeat on every reload of the layers; each is shown once per load of the module.
+const warned = new Set<string>()
+
+function warnOnce($: EngineInterface, text: string): void {
+  if (warned.has(text)) return
+  warned.add(text)
+  $.ui.log(`omp-port: ${text}`)
+}
 
 function ioFrom($: EngineInterface): Io {
   return {
@@ -55,7 +64,7 @@ async function loadAll($: EngineInterface): Promise<Snapshot> {
   const cwd = await $.session.cwd()
   const root = repo?.root ?? (await $.session.root())
   const snap = await discover(ioFrom($), { builtinDir: join($.plugin.root, 'builtin-rules'), root, cwd })
-  for (const w of snap.warnings) $.ui.log(`omp-port: ${w}`)
+  for (const w of snap.warnings) warnOnce($, w)
   return snap
 }
 
@@ -85,7 +94,7 @@ function compiledRules($: EngineInterface, snap: Snapshot): CompiledRule[] {
     for (const rule of snap.rules) {
       const c = compileRule(rule)
       if (!c) continue
-      for (const w of c.warnings) $.ui.log(`omp-port: ${w}`)
+      for (const w of c.warnings) warnOnce($, w)
       compiled.push(c)
     }
   }
@@ -184,6 +193,8 @@ const EDITS = { plugin: 'omp-port', key: 'advisorEdits' } as const
 const NOTE = { plugin: 'omp-port', key: 'advisorNote' } as const
 const DECISION = { plugin: 'omp-port', key: 'advisorDecision' } as const
 const SESSION_USD = { plugin: 'omp-port', key: 'advisorSessionUsd' } as const
+const LAST_ERROR = { plugin: 'omp-port', key: 'advisorLastError' } as const
+const ESTIMATED_FOR = { plugin: 'omp-port', key: 'advisorEstimatedFor' } as const
 
 type AdvisorSettings = { enabled: boolean; model?: string; budgetUsd?: number; totalUsd: number }
 
@@ -223,9 +234,13 @@ async function advisorReview($: EngineInterface, files: string[], answer: string
     try {
       prices = (await snapshot($)).config.advisor.prices
     } catch {}
-    const price = priceFor(s.model ?? (await $.session.model()), prices)
-    const cost = price ? costUsd(r.usage, price) : 0
-    if (!price) $.ui.log('omp-port: advisor has no price for this model; spend not counted (set advisor.prices in config)')
+    const model = s.model ?? (await $.session.model())
+    const { price, estimated } = priceOrFallback(model, prices)
+    const cost = costUsd(r.usage, price)
+    if (estimated && (await $.state.get(ESTIMATED_FOR)).value !== model) {
+      await $.state.set(ESTIMATED_FOR, model)
+      $.ui.toast(`Advisor: no price for ${model}; spend estimated at the highest known rate (set advisor.prices in config)`)
+    }
     const total = s.totalUsd + cost
     await $.store.set('advisor.totalUsd', total)
     const session = await $.state.get(SESSION_USD)
@@ -237,9 +252,11 @@ async function advisorReview($: EngineInterface, files: string[], answer: string
   }
 
   if (!r.isAnswered) {
+    await $.state.set(LAST_ERROR, r.reason)
     $.ui.log(`omp-port: advisor got no review (${r.reason})`)
     return
   }
+  await $.state.set(LAST_ERROR, null)
   const verdict = parseVerdict(r.text)
   if (verdict.ok) return
   await $.state.set(NOTE, verdict.note)
@@ -277,11 +294,15 @@ async function advisorCommand($: EngineInterface, args: string): Promise<string>
     case 'status': {
       const s = await advisorSettings($)
       const session = (await $.state.get(SESSION_USD)).value ?? 0
+      const lastError = (await $.state.get(LAST_ERROR)).value
+      const estimatedFor = (await $.state.get(ESTIMATED_FOR)).value
+      const reached = s.budgetUsd !== undefined && s.totalUsd >= s.budgetUsd
       return [
-        `Advisor ${s.enabled ? 'on' : 'off'}`,
+        `Advisor ${s.enabled ? 'on' : 'off'}${s.enabled && reached ? ' (budget reached; raise it or /advisor reset)' : ''}`,
         `model: ${s.model ?? 'session model (fork)'}`,
-        `budget: ${s.budgetUsd !== undefined ? `$${s.budgetUsd.toFixed(2)}` : 'none'}`,
-        `spent: session $${session.toFixed(3)}, total $${s.totalUsd.toFixed(3)}`,
+        `budget: ${s.budgetUsd !== undefined ? `$${s.budgetUsd.toFixed(2)}` : 'none'}${reached ? ' — budget reached' : ''}`,
+        `spent: session $${session.toFixed(3)}, total $${s.totalUsd.toFixed(3)}${estimatedFor ? ` (estimated for ${estimatedFor})` : ''}`,
+        ...(lastError ? [`last review failed: ${lastError}`] : []),
       ].join(' · ')
     }
     default:

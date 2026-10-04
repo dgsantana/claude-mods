@@ -52,3 +52,16 @@ describe('parseFrontmatter', () => {
     expect(r.body).toBe('Body')
   })
 })
+
+describe('review fixes', () => {
+  test('block sequence items at column 0 belong to the key above', () => {
+    const r = parseFrontmatter('---\ncondition: x\nglobs:\n- "*.rs"\n- "*.toml"\n---\nB')
+    expect(r.warning).toBeUndefined()
+    expect(r.data.globs).toEqual(['*.rs', '*.toml'])
+  })
+  test('a leading UTF-8 BOM does not hide the frontmatter', () => {
+    const r = parseFrontmatter('﻿---\ndescription: bom\n---\nB')
+    expect(r.data).toEqual({ description: 'bom' })
+    expect(r.body).toBe('B')
+  })
+})

@@ -50,3 +50,20 @@ describe('reviewPrompt', () => {
     expect(reviewPrompt(['/a'], 'Final answer text')).toContain('Final answer text')
   })
 })
+
+import { priceOrFallback } from '../hooks/advisor'
+
+describe('priceOrFallback', () => {
+  test('known model: exact price, not estimated', () => {
+    expect(priceOrFallback('claude-sonnet-5-5', {})).toEqual({ price: DEFAULT_PRICES['claude-sonnet-5-5']!, estimated: false })
+  })
+  test('unknown model: most expensive known price, flagged estimated', () => {
+    const r = priceOrFallback('claude-sonnet-4-6', {})
+    expect(r.estimated).toBe(true)
+    expect(r.price).toEqual(DEFAULT_PRICES['claude-fable-5-1']!)
+  })
+  test('fallback considers config prices too', () => {
+    const big = { input: 100, output: 100, cacheRead: 100, cacheWrite: 100 }
+    expect(priceOrFallback('mystery', { 'my-model': big }).price).toEqual(big)
+  })
+})

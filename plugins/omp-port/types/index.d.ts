@@ -10,6 +10,8 @@ declare module 'claude-code' {
       advisorNote: string | null
       advisorDecision: AdvisorDecision
       advisorSessionUsd: number
+      advisorLastError: string | null
+      advisorEstimatedFor: string | null
     }
   }
 }

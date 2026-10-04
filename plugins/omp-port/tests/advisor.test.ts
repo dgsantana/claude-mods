@@ -7,7 +7,7 @@ type Fork = { reply?: string; answered?: boolean; nothing?: boolean; usage?: { i
 const USAGE = { input_tokens: 1000, output_tokens: 200, cache_read_input_tokens: 50_000, cache_creation_input_tokens: 0 }
 
 // The engine beneath the plugin, with the advisor switched on through the store.
-function engine(on: On, opts: { store?: Record<string, unknown>; fork?: Fork } = {}) {
+function engine(on: On, opts: { store?: Record<string, unknown>; fork?: Fork; sessionModel?: string } = {}) {
   const captured = world(on, {})
   mock.store(on, opts.store ?? { 'advisor.enabled': true })
   const clock = mock.clock(on)
@@ -19,7 +19,7 @@ function engine(on: On, opts: { store?: Record<string, unknown>; fork?: Fork } =
     if (f.answered === false) return { value: { isAnswered: false, reason: 'api-error', status: 500, error: 'api_error', usage: USAGE } as never }
     return { value: { isAnswered: true, text: f.reply ?? 'OK', usage: f.usage ?? USAGE } }
   })
-  on('session.model', () => ({ value: 'claude-opus-5-5' }))
+  on('session.model', () => ({ value: opts.sessionModel ?? 'claude-opus-5-5' }))
   on('tool.call', () => ({ result: { ok: true } as never }))
   on('turn.start', ($, e) => ({ turnId: e.turnId }) as never)
   on('turn.complete', ($, e) => ({ text: e.answer }))
@@ -146,4 +146,26 @@ test('nothing to fork: no spend, no note, one log line, no crash', async ($, on)
   expect(w.logs.some(l => l.includes('advisor failed'))).toBe(false)
   const status = (await $.command.run({ command: 'advisor', args: 'status' } as never)).text ?? ''
   expect(status).toContain('total $0.000')
+})
+
+test('unknown session model: spend estimated high so the budget still trips; toast once', async ($, on) => {
+  const w = engine(on, { store: { 'advisor.enabled': true, 'advisor.budgetUsd': 0.01 }, sessionModel: 'claude-sonnet-4-6' })
+  await editTurn($, w.clock)
+  expect(w.toasts.some(t => /no price/i.test(t))).toBe(true)
+  expect(w.toasts.some(t => /budget/i.test(t))).toBe(true)
+  const status = (await $.command.run({ command: 'advisor', args: 'status' } as never)).text ?? ''
+  expect(status).toMatch(/estimated/i)
+})
+
+test('status explains budget reached and the last failure', async ($, on) => {
+  engine(on, { store: { 'advisor.enabled': true, 'advisor.budgetUsd': 0.01, 'advisor.totalUsd': 0.02 } })
+  const status = (await $.command.run({ command: 'advisor', args: 'status' } as never)).text ?? ''
+  expect(status).toMatch(/budget reached/i)
+})
+
+test('status shows the last review failure', async ($, on) => {
+  const w = engine(on, { fork: { answered: false } })
+  await editTurn($, w.clock)
+  const status = (await $.command.run({ command: 'advisor', args: 'status' } as never)).text ?? ''
+  expect(status).toContain('api-error')
 })

@@ -60,3 +60,13 @@ test('a broken world falls through to the engine sections', async ($, on) => {
   const { sections } = await $.prompt.compose(INPUT)
   expect(sections).toEqual([BASE])
 })
+
+test('a rule warning is logged once, not on every turn', async ($, on) => {
+  const w = world(on, { files: { '/home/u/.agents/rules/bad.md': '---\nscope: "a","b"\ndescription: d\n---\nx' } })
+  on('prompt.compose', () => ({ sections: [BASE] }))
+  on('turn.start', ($, e) => ({ turnId: e.turnId }) as never)
+  await $.prompt.compose(INPUT)
+  await $.turn.start({ text: 't', turnId: 't1' } as never)
+  await $.prompt.compose(INPUT)
+  expect(w.logs.filter(l => l.includes('bad.md')).length).toBe(1)
+})

@@ -109,6 +109,10 @@ and judged `question` rules are not supported (Claude Code exposes no stream to 
 /advisor budget <usd> | none
 ```
 
+`/advisor` settings live in the plugin's store, so they apply to every project and outlive the session;
+once set they take precedence over `advisor.*` in config.json. When the budget trips the advisor turns
+itself off: raise the budget (or `/advisor reset`) and `/advisor on` again.
+
 After a turn that edited files, the advisor asks a reviewer for `OK` or one short note. A note
 shows as a toast and a band above the prompt with **Send with next prompt** (default) and
 **Ignore**. Accepted notes ride along with your next prompt as context for the model.

@@ -31,6 +31,16 @@ export function priceFor(model: string, overrides: Record<string, Price>): Price
   return overrides[id] ?? overrides[resolved] ?? DEFAULT_PRICES[resolved]
 }
 
+// The price to charge a review at: the model's own, or, when it has none,
+// the most expensive one known, so a budget errs on the safe side.
+export function priceOrFallback(model: string, overrides: Record<string, Price>): { price: Price; estimated: boolean } {
+  const own = priceFor(model, overrides)
+  if (own) return { price: own, estimated: false }
+  const all = [...Object.values(DEFAULT_PRICES), ...Object.values(overrides)]
+  const top = all.reduce((a, b) => (b.input + b.output > a.input + a.output ? b : a))
+  return { price: top, estimated: true }
+}
+
 export function costUsd(u: Usage, p: Price): number {
   return (
     (u.input_tokens * p.input +

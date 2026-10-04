@@ -100,7 +100,7 @@ function parseStrict(lines: string[]): Record<string, unknown> {
   let listKey: string | undefined
   for (const line of lines) {
     if (stripComment(line).trim() === '') continue
-    const item = /^\s+-\s*(.*)$/.exec(line)
+    const item = /^\s+-\s*(.*)$/.exec(line) ?? (listKey ? /^-(?:\s+(.*))?$/.exec(line) : null)
     if (item) {
       if (!listKey) throw new YamlError('sequence item without key')
       ;(data[listKey] as unknown[]).push(parseScalar(item[1] ?? ''))
@@ -138,7 +138,7 @@ function parseLoose(lines: string[]): Record<string, unknown> {
 }
 
 export function parseFrontmatter(text: string): Frontmatter {
-  const src = text.replace(/\r\n/g, '\n')
+  const src = text.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n')
   if (!src.startsWith('---\n')) return { data: {}, body: text }
   const end = src.indexOf('\n---', 3)
   if (end === -1) return { data: {}, body: text }

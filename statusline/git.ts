@@ -38,7 +38,10 @@ export function gitInfo(cwd: string): GitInfo | undefined {
   } catch {}
   let info: GitInfo | undefined
   try {
-    const r = Bun.spawnSync(['git', '-C', cwd, 'status', '--porcelain=v2', '--branch'], { stderr: 'ignore' })
+    const r = Bun.spawnSync(['git', '-C', cwd, 'status', '--porcelain=v2', '--branch'], {
+      stderr: 'ignore',
+      timeout: 1000,
+    })
     info = r.exitCode === 0 ? parsePorcelain(r.stdout.toString()) : undefined
   } catch {
     info = undefined
