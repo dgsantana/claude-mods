@@ -4,9 +4,13 @@
 import type { EngineInterface, Register } from 'claude-code'
 import { costUsd, parseVerdict, priceOrFallback, reviewPrompt } from './advisor'
 import { addAgentsMd } from './agentsmd'
+import { setPath, unsetPath } from './config-patch'
 import { discover, homeDir, type Io, type Snapshot } from './load'
+import { paneRows, parseListInput, projectLayerDir } from './pane-model'
 import { isWindowsPath, join } from './paths'
 import { renderRulesSection } from './rules'
+import { SETTINGS, type Setting, TABS, type Tab, validate } from './settings-schema'
+import { listThemes } from './themes'
 import {
   astTargets,
   type Candidate,
@@ -311,6 +315,108 @@ async function advisorCommand($: EngineInterface, args: string): Promise<string>
   }
 }
 
+// The /omp settings pane: tabs over the settings catalogue, writing the
+// global or the project layer's config.json (store-backed rows to $.store).
+const PANE_ID = 'omp-port-settings'
+const PANE_TAB = { plugin: 'omp-port', key: 'paneTab' } as const
+const PANE_SCOPE = { plugin: 'omp-port', key: 'paneScope' } as const
+const PANE_ERROR = { plugin: 'omp-port', key: 'paneError' } as const
+
+let themeTable: Record<string, Record<string, string>> | undefined
+
+async function builtinThemes($: EngineInterface): Promise<Record<string, Record<string, string>>> {
+  if (themeTable) return themeTable
+  try {
+    const text = await ioFrom($).read(join($.plugin.root, 'themes', 'builtin.json'))
+    themeTable = text ? (JSON.parse(text) as Record<string, Record<string, string>>) : {}
+  } catch {
+    themeTable = {}
+  }
+  return themeTable
+}
+
+type PaneTargets = { global?: string; project?: string }
+
+async function paneTargets($: EngineInterface, snap: Snapshot): Promise<PaneTargets> {
+  const home = await homeDir(ioFrom($))
+  const repo = await $.session.repo().catch(() => null)
+  const projectDir = projectLayerDir(snap.layers, repo !== null)
+  return {
+    global: home ? join(home, '.agents', 'mods', 'config.json') : undefined,
+    project: projectDir ? join(projectDir, 'mods', 'config.json') : undefined,
+  }
+}
+
+async function storeValues($: EngineInterface): Promise<Record<string, unknown>> {
+  const out: Record<string, unknown> = {}
+  for (const s of SETTINGS) if (s.storage === 'store') out[s.key] = await $.store.get(s.key)
+  return out
+}
+
+// Applies one change to the chosen layer: `patch` turns the file's text into
+// the new text, or says why it can't.
+async function patchLayer(
+  $: EngineInterface,
+  setting: Setting,
+  patch: (text: string | undefined) => { text: string } | { error: string },
+): Promise<void> {
+  const snap = await snapshot($)
+  const scope = (await $.state.get(PANE_SCOPE)).value ?? 'global'
+  const targets = await paneTargets($, snap)
+  const target = scope === 'project' ? targets.project : targets.global
+  if (!target) {
+    $.ui.toast(`omp-port: no ${scope} config location here`)
+    return
+  }
+  const r = patch(await ioFrom($).read(target))
+  if ('error' in r) {
+    $.ui.toast(`omp-port: ${target}: ${r.error}; left unchanged`)
+    await $.state.set(PANE_ERROR, { key: setting.key, text: r.error })
+    return
+  }
+  await $.fs.write(target, r.text)
+  await $.state.set(PANE_ERROR, null)
+  cached = undefined
+}
+
+async function writeSetting($: EngineInterface, setting: Setting, raw: unknown): Promise<void> {
+  if (setting.storage === 'store' && (raw === '' || raw === undefined)) {
+    await $.store.delete(setting.key)
+    await $.state.set(PANE_ERROR, null)
+    return
+  }
+  const v = validate(setting, raw)
+  if ('error' in v) {
+    await $.state.set(PANE_ERROR, { key: setting.key, text: v.error })
+    return
+  }
+  if (setting.storage === 'store') {
+    await $.store.set(setting.key, v.value)
+    await $.state.set(PANE_ERROR, null)
+    return
+  }
+  await patchLayer($, setting, text => setPath(text, setting.key, v.value))
+}
+
+async function resetSetting($: EngineInterface, setting: Setting): Promise<void> {
+  if (setting.storage === 'store') {
+    await $.store.delete(setting.key)
+    return
+  }
+  await patchLayer($, setting, text => unsetPath(text, setting.key))
+}
+
+async function setScope($: EngineInterface, scope: 'global' | 'project'): Promise<void> {
+  if (scope === 'project') {
+    const targets = await paneTargets($, await snapshot($))
+    if (!targets.project) {
+      $.ui.toast('omp-port: "This project" needs a git repository; writing to the global layer')
+      return
+    }
+  }
+  await $.state.set(PANE_SCOPE, scope)
+}
+
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     cached = undefined
@@ -319,6 +425,11 @@ export const register: Register = on => {
       description: 'Advisor review of edit turns: on, off, status, model, budget',
       argumentHint: 'on|off|status|model <id>|budget <usd>',
     })
+    await $.command.register({
+      name: 'omp',
+      description: 'omp-port settings: status line, TTSR, rules, advisor, context',
+      argumentHint: '[statusline|ttsr|rules|advisor|context]',
+    })
     return next(e)
   })
 
@@ -326,6 +437,98 @@ export const register: Register = on => {
     cached = undefined
     await $.state.set(EDITS, [])
     return next(e)
+  })
+
+  on('command.run', { command: 'omp' }, async ($, e) => {
+    const tab = TABS.find(t => t.id === e.args.trim())?.id
+    if (tab) await $.state.set(PANE_TAB, tab)
+    await $.ui.open({ id: PANE_ID, title: 'omp-port settings', focus: true, closeOnEscape: true })
+    return { text: 'omp-port settings opened.' }
+  })
+
+  on('ui.render', { component: 'Pane', requestId: PANE_ID }, async ($, e) => {
+    if (e.surface === 'mobile') {
+      const { Text } = $.ui.resolve(e)
+      return <Text>omp-port settings need a terminal or desktop session (pickers and inputs).</Text>
+    }
+    const { Box, Button, Input, Select, Text } = $.ui.resolve(e)
+    const tab: Tab = (await $.state.get(PANE_TAB)).value ?? 'statusline'
+    const scope = (await $.state.get(PANE_SCOPE)).value ?? 'global'
+    const error = (await $.state.get(PANE_ERROR)).value
+    let snap: Snapshot
+    try {
+      snap = await snapshot($)
+    } catch (err) {
+      return <Text>omp-port: settings unavailable ({errText(err)})</Text>
+    }
+    const targets = await paneTargets($, snap)
+    const rows = paneRows(tab, snap, await storeValues($))
+    const themes = listThemes(await builtinThemes($), snap.themeSpecs)
+
+    const control = (s: Setting, value: unknown) => {
+      const key = `set-${s.key}`
+      switch (s.kind) {
+        case 'bool':
+          return <Button key={key} label={value ? '[x] on' : '[ ] off'} onPress={() => writeSetting($, s, !value)} />
+        case 'enum':
+        case 'theme': {
+          const options = s.kind === 'enum' ? s.options : themes.includes(String(value)) ? themes : [String(value), ...themes]
+          return (
+            <Select key={key} options={options.map(o => ({ value: o }))} value={String(value)} onSelect={(v: string) => writeSetting($, s, v)} />
+          )
+        }
+        case 'segments':
+        case 'stringList':
+          return (
+            <Input
+              key={key}
+              value={Array.isArray(value) ? value.join(', ') : ''}
+              onSubmit={(v: string) => writeSetting($, s, parseListInput(v))}
+            />
+          )
+        default:
+          return <Input key={key} value={value === undefined ? '' : String(value)} onSubmit={(v: string) => writeSetting($, s, v)} />
+      }
+    }
+
+    return (
+      <Box flexDirection="column">
+        <Box gap={1}>
+          {TABS.map((t, i) => (
+            <Button
+              key={`tab-${t.id}`}
+              hotkey={String(i + 1)}
+              label={t.label}
+              variant={t.id === tab ? 'primary' : undefined}
+              onPress={() => $.state.set(PANE_TAB, t.id)}
+            />
+          ))}
+        </Box>
+        <Box gap={1}>
+          <Text dimColor>write to</Text>
+          <Button key="scope-global" label="Global" variant={scope === 'global' ? 'primary' : undefined} onPress={() => setScope($, 'global')} />
+          <Button
+            key="scope-project"
+            label="This project"
+            dimColor={!targets.project}
+            variant={scope === 'project' ? 'primary' : undefined}
+            onPress={() => setScope($, 'project')}
+          />
+          <Text dimColor>{(scope === 'project' ? targets.project : targets.global) ?? ''}</Text>
+        </Box>
+        {rows.map(row => (
+          <Box key={`row-${row.setting.key}`} flexDirection="column">
+            <Box gap={1}>
+              <Text bold>{row.setting.label}</Text>
+              {control(row.setting, row.value)}
+              <Text dimColor>({row.origin})</Text>
+              <Button key={`reset-${row.setting.key}`} label="reset" plain onPress={() => resetSetting($, row.setting)} />
+            </Box>
+            {error?.key === row.setting.key ? <Text color="red">{error.text}</Text> : <Text dimColor>{row.setting.description}</Text>}
+          </Box>
+        ))}
+      </Box>
+    )
   })
 
   on('command.run', { command: 'advisor' }, async ($, e) => ({ text: await advisorCommand($, e.args) }))
