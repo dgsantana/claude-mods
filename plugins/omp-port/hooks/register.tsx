@@ -369,13 +369,28 @@ async function patchLayer(
     $.ui.toast(`omp-port: no ${scope} config location here`)
     return
   }
-  const r = patch(await ioFrom($).read(target))
-  if ('error' in r) {
-    $.ui.toast(`omp-port: ${target}: ${r.error}; left unchanged`)
-    await $.state.set(PANE_ERROR, { key: setting.key, text: r.error })
-    return
+  const fail = async (why: string) => {
+    $.ui.toast(`omp-port: ${target}: ${why}; left unchanged`)
+    await $.state.set(PANE_ERROR, { key: setting.key, text: why })
   }
-  await $.fs.write(target, r.text)
+  // A file that exists but can't be read is never treated as missing.
+  let text: string | undefined
+  try {
+    if (await $.fs.exists(target)) {
+      const read = await $.fs.read(target)
+      if (typeof read !== 'string') return fail('not a text file')
+      text = read
+    }
+  } catch (err) {
+    return fail(`can't read it (${errText(err)})`)
+  }
+  const r = patch(text)
+  if ('error' in r) return fail(r.error)
+  try {
+    await $.fs.write(target, r.text)
+  } catch (err) {
+    return fail(errText(err))
+  }
   await $.state.set(PANE_ERROR, null)
   cached = undefined
 }
@@ -430,12 +445,19 @@ async function paneExtras(
 ) {
   const { Box, Button, Text } = $.ui.resolve(e)
   if (tab === 'statusline') {
-    const theme = resolveTheme(statusline.theme, builtin, snap.themeSpecs).theme
+    const resolved = resolveTheme(statusline.theme, builtin, snap.themeSpecs)
+    const warnings = [...sanitizeStatusline(snap.config.statusline).warnings, ...resolved.warnings]
+    for (const w of warnings) warnOnce($, w)
     return (
-      <Box gap={1} flexWrap="wrap">
-        <Text dimColor>preview</Text>
-        {previewSegments(statusline, theme).map(seg => (
-          <Text color={seg.colour}>{seg.text}</Text>
+      <Box flexDirection="column">
+        <Box gap={1} flexWrap="wrap">
+          <Text dimColor>preview</Text>
+          {previewSegments(statusline, resolved.theme).map(seg => (
+            <Text color={seg.colour}>{seg.text}</Text>
+          ))}
+        </Box>
+        {warnings.map(w => (
+          <Text color="yellow">{`⚠ ${w}`}</Text>
         ))}
       </Box>
     )

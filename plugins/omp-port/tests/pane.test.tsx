@@ -186,3 +186,32 @@ test('advisor tab: spend shown, reset spend, budget goes to the store', async ($
   expect(status).toContain('$3.00')
   expect(status).toContain('total $0.000')
 })
+
+test('a failed write toasts and shows the error (I-3)', async ($, on) => {
+  const w = world(on, { themes: THEMES, failWrites: true })
+  mock.store(on, {})
+  on('ui.render', () => null as never)
+  const pane = await $.ui.mount(PANE)
+  await pane.select({ key: 'set-statusline.theme', value: 'dark-nord' })
+  expect(w.toasts.some(t => t.includes(GLOBAL) && /EACCES/.test(t))).toBe(true)
+  expect(await pane.find({ text: /EACCES/ })).toBeDefined()
+})
+
+test('an existing but unreadable config.json is never overwritten (I-4)', async ($, on) => {
+  const w = world(on, { themes: THEMES, files: { [GLOBAL]: '{"keep":true}' }, unreadable: [GLOBAL] })
+  mock.store(on, {})
+  on('ui.render', () => null as never)
+  const pane = await $.ui.mount(PANE)
+  await pane.select({ key: 'set-statusline.theme', value: 'dark-nord' })
+  expect(w.writes[GLOBAL]).toBeUndefined()
+  expect(w.toasts.some(t => t.includes(GLOBAL))).toBe(true)
+})
+
+test('status line config and theme warnings show on the Status line tab (I-5)', async ($, on) => {
+  world(on, { themes: THEMES, files: { [GLOBAL]: '{"statusline":{"theme":"drak","left":["model","bogus"]}}' } })
+  mock.store(on, {})
+  on('ui.render', () => null as never)
+  const pane = await $.ui.mount(PANE)
+  expect(await pane.find({ text: /drak/ })).toBeDefined()
+  expect(await pane.find({ text: /bogus/ })).toBeDefined()
+})

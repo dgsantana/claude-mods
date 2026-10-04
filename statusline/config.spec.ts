@@ -57,3 +57,35 @@ describe('loadStatusline', () => {
     expect((await loadStatusline(input(), env(), cacheDir)).config.separator).toBe('slash')
   })
 })
+
+describe('review fixes', () => {
+  test('editing a custom theme file in place refreshes the status line (I-1)', async () => {
+    write(join(home, '.agents/mods/config.json'), '{"statusline":{"theme":"mine"}}')
+    const theme = join(home, '.agents/mods/themes/mine.json')
+    write(theme, '{"colors":{"statusLineModel":"#ff0000"}}')
+    expect((await loadStatusline(input(), env(), cacheDir)).theme.statusLineModel).toEqual({ r: 255, g: 0, b: 0 })
+    write(theme, '{"colors":{"statusLineModel":"#00ff00"}}')
+    const t = new Date(Date.now() + 5000)
+    utimesSync(theme, t, t)
+    expect((await loadStatusline(input(), env(), cacheDir)).theme.statusLineModel).toEqual({ r: 0, g: 255, b: 0 })
+  })
+  test('started in a repo subfolder: the repo root .agents is read (I-2)', async () => {
+    mkdirSync(join(project, '.git'), { recursive: true })
+    const sub = join(project, 'pkg')
+    mkdirSync(sub, { recursive: true })
+    write(join(project, '.agents/mods/config.json'), '{"statusline":{"separator":"slash"}}')
+    const r = await loadStatusline({ workspace: { current_dir: sub, project_dir: sub } }, env(), cacheDir)
+    expect(r.config.separator).toBe('slash')
+  })
+  test('a stale cached config missing keys is re-sanitised (M-2)', async () => {
+    await loadStatusline(input(), env(), cacheDir)
+    const { readdirSync, readFileSync } = await import('node:fs')
+    const file = join(cacheDir, readdirSync(cacheDir).find(f => f.startsWith('claude-mods-statusline-cfg-')) ?? '')
+    const cached = JSON.parse(readFileSync(file, 'utf8'))
+    cached.loaded.config = { theme: 'dark' }
+    writeFileSync(file, JSON.stringify(cached))
+    const r = await loadStatusline(input(), env(), cacheDir)
+    expect(r.config.left.length).toBeGreaterThan(0)
+    expect(r.config.ctx.warnAt).toBe(50)
+  })
+})

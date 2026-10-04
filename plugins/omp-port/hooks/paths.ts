@@ -35,10 +35,11 @@ export function dirname(path: string): string {
   return head
 }
 
-// Comparison key: forward slashes, no trailing slash, lower-case drive letter.
+// Comparison key: forward slashes, no trailing slash; Windows paths compare
+// case-insensitively, as the file system does.
 function key(path: string): string {
   const p = path.replace(/\\/g, '/').replace(/\/+$/, '')
-  return /^[a-zA-Z]:/.test(p) ? p.charAt(0).toLowerCase() + p.slice(1) : p
+  return isWindowsPath(path) ? p.toLowerCase() : p
 }
 
 export function samePath(a: string, b: string): boolean {

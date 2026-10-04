@@ -159,3 +159,10 @@ describe('discover: config layers and custom themes', () => {
     expect(snap.warnings.some(w => w.includes('bad.json'))).toBe(true)
   })
 })
+
+import { layerDirs } from '../hooks/load'
+describe('layerDirs (M-6)', () => {
+  test('home skipped from the project chain despite Windows case differences', () => {
+    expect(layerDirs('C:\\Users\\Bob', 'c:\\users\\bob', 'c:\\users\\bob').map(l => l.source)).toEqual(['global'])
+  })
+})

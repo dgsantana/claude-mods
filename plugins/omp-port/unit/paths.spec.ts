@@ -49,3 +49,10 @@ describe('chainBetween', () => {
     expect(chainBetween('/r', '/r')).toEqual(['/r'])
   })
 })
+
+describe('review fixes', () => {
+  test('Windows paths compare case-insensitively (M-6)', () => {
+    expect(samePath('C:\\Users\\Bob', 'c:\\users\\bob')).toBe(true)
+    expect(samePath('/home/Bob', '/home/bob')).toBe(false)
+  })
+})

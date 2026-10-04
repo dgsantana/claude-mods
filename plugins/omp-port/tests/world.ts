@@ -13,6 +13,8 @@ export type World = {
   broken?: boolean
   // Served for any path ending in themes/builtin.json (the plugin's theme table).
   themes?: Record<string, Record<string, string>>
+  failWrites?: boolean
+  unreadable?: string[]
 }
 
 export type Captured = { toasts: string[]; logs: string[]; writes: Record<string, string>; opened: string[]; files: Map<string, string> }
@@ -37,6 +39,7 @@ export function world(on: On, w: World): Captured {
   }))
   on('fs.exists', ($, e) => (w.broken ? gone() : { value: files.has(norm(e.path)) || isDir(e.path) || (isThemes(e.path) && themes !== undefined) }))
   on('fs.read', ($, e) => {
+    if (w.unreadable?.some(p => norm(p) === norm(e.path))) return { deny: `EACCES ${e.path}` }
     const text = files.get(norm(e.path)) ?? (isThemes(e.path) ? themes : undefined)
     return text === undefined ? { deny: `ENOENT ${e.path}` } : { value: text }
   })
@@ -56,6 +59,7 @@ export function world(on: On, w: World): Captured {
     return { value: out }
   })
   on('fs.write', ($, e) => {
+    if (w.failWrites) return { deny: `EACCES: permission denied, open '${e.path}'` }
     files.set(norm(e.path), e.text)
     captured.writes[norm(e.path)] = e.text
     return { value: undefined }
