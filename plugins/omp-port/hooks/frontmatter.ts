@@ -20,7 +20,7 @@ function stripComment(s: string): string {
       if (c === '\\' && quote === '"') i++
       else if (c === quote) quote = undefined
     } else if (c === '"' || c === "'") quote = c
-    else if (c === '#' && (i === 0 || /\s/.test(s[i - 1]))) return s.slice(0, i).trimEnd()
+    else if (c === '#' && (i === 0 || /\s/.test(s[i - 1] ?? ''))) return s.slice(0, i).trimEnd()
   }
   return s
 }
@@ -103,12 +103,12 @@ function parseStrict(lines: string[]): Record<string, unknown> {
     const item = /^\s+-\s*(.*)$/.exec(line)
     if (item) {
       if (!listKey) throw new YamlError('sequence item without key')
-      ;(data[listKey] as unknown[]).push(parseScalar(item[1]))
+      ;(data[listKey] as unknown[]).push(parseScalar(item[1] ?? ''))
       continue
     }
     const kv = /^([\w-]+):(?:\s+(.*))?$/.exec(line)
     if (!kv) throw new YamlError(`unparseable line: ${line}`)
-    const key = camel(kv[1])
+    const key = camel(kv[1] ?? '')
     const rest = kv[2] === undefined ? '' : stripComment(kv[2]).trim()
     if (rest === '') {
       data[key] = []
@@ -126,11 +126,12 @@ function parseLoose(lines: string[]): Record<string, unknown> {
   for (const line of lines) {
     const kv = /^([\w-]+):\s*(.*)$/.exec(line)
     if (!kv) continue
-    const raw = kv[2].trim()
+    const key = camel(kv[1] ?? '')
+    const raw = (kv[2] ?? '').trim()
     try {
-      data[camel(kv[1])] = parseScalar(raw)
+      data[key] = parseScalar(raw)
     } catch {
-      data[camel(kv[1])] = raw
+      data[key] = raw
     }
   }
   return data
