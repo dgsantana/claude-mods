@@ -16,7 +16,7 @@ export function settingsTable(): string {
       s.kind === 'enum' ? s.options.map(o => `\`${o}\``).join(' ') :
       s.kind === 'number' ? [s.min !== undefined ? `≥ ${s.min}` : '', s.max !== undefined ? `≤ ${s.max}` : ''].filter(Boolean).join(', ') || 'number' :
       s.kind === 'segments' ? 'segment ids' : s.kind === 'stringList' ? 'names' : s.kind === 'theme' ? 'theme name' : s.kind
-    const where = s.storage === 'store' ? ' (stored by `/advisor`, not config.json)' : ''
+    const where = s.storage === 'store' ? ' (stored by `/omp advisor` and the pane, not config.json)' : ''
     lines.push(`| \`${s.key}\` | ${tab} | ${show(s.default)} | ${values} | ${s.description}${where} |`)
   }
   return lines.join('\n') + '\n'

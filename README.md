@@ -91,9 +91,9 @@ never overwritten. Everything can also be edited by hand:
 | `ttsr.repeatGap` | TTSR | `10` | ≥ 1, ≤ 1000 | Completed turns before an after-gap rule may fire again. |
 | `rules.builtin` | Rules | `true` | bool | Load the rules vendored from oh-my-pi. |
 | `rules.disabled` | Rules | `[]` | names | Rule names to drop. |
-| `advisor.enabled` | Advisor | `false` | bool | Review turns that edited files. (stored by `/advisor`, not config.json) |
-| `advisor.model` | Advisor | none | string | Reviewer model id; empty reuses the session through a cached fork. (stored by `/advisor`, not config.json) |
-| `advisor.budgetUsd` | Advisor | none | ≥ 0 | The advisor turns itself off once total spend reaches this; empty for none. (stored by `/advisor`, not config.json) |
+| `advisor.enabled` | Advisor | `false` | bool | Review turns that edited files. (stored by `/omp advisor` and the pane, not config.json) |
+| `advisor.model` | Advisor | none | string | Reviewer model id; empty reuses the session through a cached fork. (stored by `/omp advisor` and the pane, not config.json) |
+| `advisor.budgetUsd` | Advisor | none | ≥ 0 | The advisor turns itself off once total spend reaches this; empty for none. (stored by `/omp advisor` and the pane, not config.json) |
 | `append.enabled` | Context | `true` | bool | Append .agents/mods/APPEND_SYSTEM.md to the system prompt. |
 | `agentsMd.enabled` | Context | `true` | bool | Load AGENTS.md files beside CLAUDE.md. |
 <!-- settings:end -->
@@ -145,15 +145,17 @@ and judged `question` rules are not supported (Claude Code exposes no stream to 
 
 ## Advisor
 
+Claude Code has its own built-in `/advisor`; omp-port's advisor lives under `/omp advisor`.
+
 ```
-/advisor on | off | status | reset
-/advisor model <id> | default
-/advisor budget <usd> | none
+/omp advisor on | off | status | reset
+/omp advisor model <id> | default
+/omp advisor budget <usd> | none
 ```
 
-`/advisor` settings live in the plugin's store, so they apply to every project and outlive the session;
+Advisor settings (from `/omp advisor` or the pane's Advisor tab) live in the plugin's store, so they apply to every project and outlive the session;
 once set they take precedence over `advisor.*` in config.json. When the budget trips the advisor turns
-itself off: raise the budget (or `/advisor reset`) and `/advisor on` again.
+itself off: raise the budget (or `/omp advisor reset`) and `/omp advisor on` again.
 
 After a turn that edited files, the advisor asks a reviewer for `OK` or one short note. A note
 shows as a toast and a band above the prompt with **Send with next prompt** (default) and

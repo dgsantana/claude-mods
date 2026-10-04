@@ -95,7 +95,7 @@ test('spend accumulates; crossing the budget switches the advisor off', async ($
   expect(w.toasts.some(t => /budget/i.test(t))).toBe(true)
   await editTurn($, w.clock)
   expect(w.forks).toHaveLength(1)
-  const status = await $.command.run({ command: 'advisor', args: 'status' } as never)
+  const status = await $.command.run({ command: 'omp', args: 'advisor status' } as never)
   expect(status.text).toMatch(/off/i)
   expect(status.text).toContain('$0.033')
 })
@@ -115,14 +115,14 @@ test('fork not answered: nothing shown, one log line', async ($, on) => {
 
 test('/advisor on|off|budget|model|status', async ($, on) => {
   engine(on, { store: {} })
-  expect((await $.command.run({ command: 'advisor', args: 'on' } as never)).text).toMatch(/on/i)
-  await $.command.run({ command: 'advisor', args: 'budget 2.5' } as never)
-  await $.command.run({ command: 'advisor', args: 'model claude-haiku-4-5' } as never)
-  const status = (await $.command.run({ command: 'advisor', args: 'status' } as never)).text ?? ''
+  expect((await $.command.run({ command: 'omp', args: 'advisor on' } as never)).text).toMatch(/on/i)
+  await $.command.run({ command: 'omp', args: 'advisor budget 2.5' } as never)
+  await $.command.run({ command: 'omp', args: 'advisor model claude-haiku-4-5' } as never)
+  const status = (await $.command.run({ command: 'omp', args: 'advisor status' } as never)).text ?? ''
   expect(status).toMatch(/on/i)
   expect(status).toContain('claude-haiku-4-5')
   expect(status).toContain('$2.50')
-  expect((await $.command.run({ command: 'advisor', args: 'off' } as never)).text).toMatch(/off/i)
+  expect((await $.command.run({ command: 'omp', args: 'advisor off' } as never)).text).toMatch(/off/i)
 })
 
 test('configured model uses model.complete with the answer, not fork', async ($, on) => {
@@ -144,7 +144,7 @@ test('nothing to fork: no spend, no note, one log line, no crash', async ($, on)
   await editTurn($, w.clock)
   expect(w.logs.some(l => l.includes('nothing-to-fork'))).toBe(true)
   expect(w.logs.some(l => l.includes('advisor failed'))).toBe(false)
-  const status = (await $.command.run({ command: 'advisor', args: 'status' } as never)).text ?? ''
+  const status = (await $.command.run({ command: 'omp', args: 'advisor status' } as never)).text ?? ''
   expect(status).toContain('total $0.000')
 })
 
@@ -153,19 +153,19 @@ test('unknown session model: spend estimated high so the budget still trips; toa
   await editTurn($, w.clock)
   expect(w.toasts.some(t => /no price/i.test(t))).toBe(true)
   expect(w.toasts.some(t => /budget/i.test(t))).toBe(true)
-  const status = (await $.command.run({ command: 'advisor', args: 'status' } as never)).text ?? ''
+  const status = (await $.command.run({ command: 'omp', args: 'advisor status' } as never)).text ?? ''
   expect(status).toMatch(/estimated/i)
 })
 
 test('status explains budget reached and the last failure', async ($, on) => {
   engine(on, { store: { 'advisor.enabled': true, 'advisor.budgetUsd': 0.01, 'advisor.totalUsd': 0.02 } })
-  const status = (await $.command.run({ command: 'advisor', args: 'status' } as never)).text ?? ''
+  const status = (await $.command.run({ command: 'omp', args: 'advisor status' } as never)).text ?? ''
   expect(status).toMatch(/budget reached/i)
 })
 
 test('status shows the last review failure', async ($, on) => {
   const w = engine(on, { fork: { answered: false } })
   await editTurn($, w.clock)
-  const status = (await $.command.run({ command: 'advisor', args: 'status' } as never)).text ?? ''
+  const status = (await $.command.run({ command: 'omp', args: 'advisor status' } as never)).text ?? ''
   expect(status).toContain('api-error')
 })

@@ -57,6 +57,9 @@ All four must pass before a commit that touches `plugins/` or `statusline/`.
 - Pane ids are 1–64 of `[A-Za-z0-9_-]`. `Text` has no `key` prop; key `Box`/`Button`/`Select`/`Input`.
   The mobile surface has no `Input`/`Select`: narrow on `e.surface` before resolving them.
 - Inline test plugins (`test(name, { plugins }, …)`) can't close over test-file variables.
+- `$.command.register` throws for a name a built-in owns (e.g. `/advisor`), and the test kit does
+  not reproduce that. Register each command in its own try/catch, and never hook `command.run`
+  for a built-in's name. omp-port's commands live under `/omp`.
 
 ## Engine test conventions
 

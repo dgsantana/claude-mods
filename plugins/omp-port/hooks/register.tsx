@@ -304,7 +304,7 @@ async function advisorCommand($: EngineInterface, args: string): Promise<string>
       const estimatedFor = (await $.state.get(ESTIMATED_FOR)).value
       const reached = s.budgetUsd !== undefined && s.totalUsd >= s.budgetUsd
       return [
-        `Advisor ${s.enabled ? 'on' : 'off'}${s.enabled && reached ? ' (budget reached; raise it or /advisor reset)' : ''}`,
+        `Advisor ${s.enabled ? 'on' : 'off'}${s.enabled && reached ? ' (budget reached; raise it or /omp advisor reset)' : ''}`,
         `model: ${s.model ?? 'session model (fork)'}`,
         `budget: ${s.budgetUsd !== undefined ? `$${s.budgetUsd.toFixed(2)}` : 'none'}${reached ? ' — budget reached' : ''}`,
         `spent: session $${session.toFixed(3)}, total $${s.totalUsd.toFixed(3)}${estimatedFor ? ` (estimated for ${estimatedFor})` : ''}`,
@@ -312,7 +312,7 @@ async function advisorCommand($: EngineInterface, args: string): Promise<string>
       ].join(' · ')
     }
     default:
-      return 'Usage: /advisor on|off|status|model <id|default>|budget <usd|none>|reset'
+      return 'Usage: /omp advisor on|off|status|model <id|default>|budget <usd|none>|reset'
   }
 }
 
@@ -501,16 +501,16 @@ async function paneExtras(
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     cached = undefined
-    await $.command.register({
-      name: 'advisor',
-      description: 'Advisor review of edit turns: on, off, status, model, budget',
-      argumentHint: 'on|off|status|model <id>|budget <usd>',
-    })
-    await $.command.register({
-      name: 'omp',
-      description: 'omp-port settings: status line, TTSR, rules, advisor, context',
-      argumentHint: '[statusline|ttsr|rules|advisor|context]',
-    })
+    // One refused registration (a name a built-in owns) must not stop the rest.
+    try {
+      await $.command.register({
+        name: 'omp',
+        description: 'omp-port settings pane; `/omp advisor on|off|status|model|budget|reset` for the advisor',
+        argumentHint: '[statusline|ttsr|rules|advisor|context] | advisor <verb>',
+      })
+    } catch (err) {
+      warnOnce($, `can't register /omp (${errText(err)})`)
+    }
     return next(e)
   })
 
@@ -521,7 +521,9 @@ export const register: Register = on => {
   })
 
   on('command.run', { command: 'omp' }, async ($, e) => {
-    const tab = TABS.find(t => t.id === e.args.trim())?.id
+    const [first = '', ...rest] = e.args.trim().split(/\s+/)
+    if (first === 'advisor' && rest.length > 0) return { text: await advisorCommand($, rest.join(' ')) }
+    const tab = TABS.find(t => t.id === first)?.id
     if (tab) await $.state.set(PANE_TAB, tab)
     await $.ui.open({ id: PANE_ID, title: 'omp-port settings', focus: true, closeOnEscape: true })
     return { text: 'omp-port settings opened.' }
@@ -640,8 +642,6 @@ export const register: Register = on => {
       </Box>
     )
   })
-
-  on('command.run', { command: 'advisor' }, async ($, e) => ({ text: await advisorCommand($, e.args) }))
 
   on('prompt.submit', async ($, e, next) => {
     const note = (await $.state.get(NOTE)).value

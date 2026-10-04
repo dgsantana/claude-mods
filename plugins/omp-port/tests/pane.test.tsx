@@ -99,7 +99,7 @@ test('store-backed advisor settings write the store, not config', async ($, on) 
   await pane.press({ key: 'tab-advisor' })
   await pane.press({ key: 'set-advisor.enabled' })
   expect(Object.keys(w.writes)).toEqual([])
-  const status = (await $.command.run({ command: 'advisor', args: 'status' } as never)).text ?? ''
+  const status = (await $.command.run({ command: 'omp', args: 'advisor status' } as never)).text ?? ''
   expect(status).toMatch(/^Advisor on/)
 })
 
@@ -182,7 +182,7 @@ test('advisor tab: spend shown, reset spend, budget goes to the store', async ($
   await pane.press({ key: 'advisor-reset-spend' })
   await pane.input({ key: 'set-advisor.budgetUsd', text: '3' })
   expect(Object.keys(w.writes)).toEqual([])
-  const status = (await $.command.run({ command: 'advisor', args: 'status' } as never)).text ?? ''
+  const status = (await $.command.run({ command: 'omp', args: 'advisor status' } as never)).text ?? ''
   expect(status).toContain('$3.00')
   expect(status).toContain('total $0.000')
 })
