@@ -10,13 +10,16 @@ plugin marketplace (`github.com/dgsantana/claude-mods`). See README.md for what 
 | `.claude-plugin/marketplace.json` | Marketplace manifest; one entry per plugin under `plugins/` |
 | `plugins/omp-port/` | The omp-port plugin (function-hook mod) |
 | `plugins/omp-port/hooks/register.tsx` | The one hooks module; every `$` call lives here |
-| `plugins/omp-port/hooks/*.ts` | Pure logic: frontmatter, paths, glob, layers, load, rule, rules, ttsr-match, advisor, agentsmd |
+| `plugins/omp-port/hooks/*.ts` | Pure logic: frontmatter, paths, glob, layers, load, rule, rules, ttsr-match, advisor, agentsmd, settings-schema, statusline-config, config-patch, themes, pane-model |
+| `plugins/omp-port/hooks/settings-schema.ts` | The settings catalogue: defaults, validation, `/omp` pane rows and the README table all come from it |
+| `plugins/omp-port/themes/builtin.json` | 102 status-line palettes generated from oh-my-pi by `scripts/vendor-themes.ts`. Don't edit; regenerate |
 | `plugins/omp-port/types/index.d.ts` | `$.state` contract (`PluginState['omp-port']`) |
 | `plugins/omp-port/builtin-rules/` | Rules vendored from oh-my-pi (MIT, see NOTICE). Don't edit; re-vendor |
 | `plugins/omp-port/unit/*.spec.ts` | Unit tests for pure modules (`bun test`) |
 | `plugins/omp-port/tests/*.test.ts` | Engine tests (`claude plugin test`); `tests/world.ts` fakes fs/session/env |
 | `statusline/` | Standalone Bun status line script, its installer and specs |
-| `examples/.agents/` | Sample layered config, APPEND_SYSTEM and rules |
+| `scripts/` | `vendor-themes.ts` (regenerate themes from an omp checkout), `settings-table.ts --write` (README table) |
+| `examples/.agents/` | Sample layered config, APPEND_SYSTEM, rules and a custom theme |
 | `docs/superpowers/` | Specs and implementation plans |
 
 ## Commands
@@ -49,6 +52,11 @@ All four must pass before a commit that touches `plugins/` or `statusline/`.
   State a drawing reads belongs in `$.state`; module variables reset on hot reload.
 - Statusline code is plain Bun and may use `node:*`; it must not import from `register.tsx`, but
   may import pure modules from `plugins/omp-port/hooks/`.
+- Hook modules can't import `.json`; the plugin reads `themes/builtin.json` at run time through
+  `$.fs` from `$.plugin.root`.
+- Pane ids are 1–64 of `[A-Za-z0-9_-]`. `Text` has no `key` prop; key `Box`/`Button`/`Select`/`Input`.
+  The mobile surface has no `Input`/`Select`: narrow on `e.surface` before resolving them.
+- Inline test plugins (`test(name, { plugins }, …)`) can't close over test-file variables.
 
 ## Engine test conventions
 
@@ -71,6 +79,9 @@ All four must pass before a commit that touches `plugins/` or `statusline/`.
   `warnOnce`. A broken rule file or failed model call must never block a tool call or prompt.
 - **TDD.** Failing test first, watch it fail, then implement. Pure logic gets a `*.spec.ts`;
   hook wiring gets a `*.test.ts`.
+- **Adding a setting:** add it to `SETTINGS` in `settings-schema.ts` (and to `StatuslineConfig` if
+  it is a status line key), then `bun scripts/settings-table.ts --write`. A spec fails while the
+  README table is stale.
 - **Layering.** Config, rules and APPEND_SYSTEM come from `.agents/` layers: builtin →
   `~/.agents/` → project `.agents/` from repo root down to cwd. Never read `~/.omp`.
   Don't use `.claude/rules/` (Claude Code loads it in full on its own).

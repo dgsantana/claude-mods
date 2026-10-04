@@ -1,0 +1,8 @@
+{
+  "extends": "dark-tokyo-night",
+  "vars": { "hot": "#ff5f87" },
+  "colors": {
+    "statusLineModel": "hot",
+    "statusLineCaveman": "#e0af68"
+  }
+}

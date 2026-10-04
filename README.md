@@ -11,7 +11,8 @@ plus a nerd-font **status line**.
 | Rules | omp-format rule files: `alwaysApply` rules go into the system prompt, described rules form a rulebook index |
 | TTSR | Time Traveling Stream Rules, tool scope: rules checked against every `Edit`/`Write`; a reminder after the result, or a deny before it |
 | Advisor | Optional reviewer of turns that edited files; you accept or ignore its note; spend tracking and a budget |
-| Status line | omp `nerd`-style powerline line: model, caveman badge, mode, path, git, PR · session, tokens, cost, 5-hour usage left, context % |
+| Status line | omp-style themed line (102 omp themes + custom), configurable segments, separators and icons |
+| `/omp` | omp-style settings pane for all of the above |
 
 Works on Linux and Windows. Nothing reads omp's own `~/.omp` files; omp is not required.
 
@@ -63,22 +64,63 @@ which would put every trigger rule into context.
 
 See [`examples/.agents/`](examples/.agents) for a sample config, append file and rules.
 
-## config.json
+## Settings
 
-| Key | Default | Meaning |
-|---|---|---|
-| `rules.builtin` | `true` | Load the vendored omp built-in rules |
-| `rules.disabled` | `[]` | Rule names to drop |
-| `ttsr.enabled` | `true` | Check Edit/Write against trigger rules |
-| `ttsr.interruptMode` | `"always"` | Default for rules without their own: `always`/`tool-only` deny, `never` reminds after |
-| `ttsr.repeatMode` | `"once"` | `once` per session, or `after-gap` |
-| `ttsr.repeatGap` | `10` | Completed turns before an `after-gap` rule may fire again |
-| `append.enabled` | `true` | APPEND_SYSTEM section |
-| `agentsMd.enabled` | `true` | AGENTS.md loading |
-| `advisor.enabled` | `false` | Advisor default (the `/advisor` command overrides it) |
-| `advisor.model` | session model | Reviewer model; unset uses a fork of the session (prompt-cache hit) |
-| `advisor.budgetUsd` | none | Advisor switches itself off once total spend reaches this |
-| `advisor.prices` | built-in table | `{ "<model>": { input, output, cacheRead, cacheWrite } }`, USD per MTok |
+Run `/omp` in a session for the settings pane (tabs: Status line, TTSR, Rules, Advisor, Context).
+It writes `~/.agents/mods/config.json` by default; switch to **This project** to write the
+repository's `.agents/mods/config.json`. Each row shows where its value comes from
+(`default`, `global`, `project`, `store`) and has a reset. A config.json that isn't valid JSON is
+never overwritten. Everything can also be edited by hand:
+
+<!-- settings:start -->
+| Key | Tab | Default | Values | Meaning |
+|---|---|---|---|---|
+| `statusline.theme` | Status line | `"dark"` | theme name | Colour theme: one of the 102 omp themes or a custom one from .agents/mods/themes/. |
+| `statusline.separator` | Status line | `"powerline-thin"` | `powerline` `powerline-thin` `slash` `pipe` `block` `none` `ascii` | How segments are separated; powerline draws filled segments on the theme background. |
+| `statusline.icons` | Status line | `"nerd"` | `nerd` `ascii` `none` | Nerd Font glyphs, short ASCII labels, or no icons. |
+| `statusline.left` | Status line | `["model","caveman","mode","path","git","pr"]` | segment ids | Segments on the left, in order. |
+| `statusline.right` | Status line | `["session","tokens","cost","fiveHour","ctx"]` | segment ids | Segments on the right, in order. |
+| `statusline.path.style` | Status line | `"basename"` | `basename` `full` `home` | Folder name only, the full path, or the path relative to home (~). |
+| `statusline.git.aheadBehind` | Status line | `true` | bool | Show ↑/↓ commit counts against the upstream branch. |
+| `statusline.fiveHour.showReset` | Status line | `true` | bool | Show the time until the 5-hour usage window resets. |
+| `statusline.ctx.warnAt` | Status line | `50` | ≥ 0, ≤ 100 | Context use at which the segment turns to the warning colour. |
+| `statusline.ctx.errorAt` | Status line | `80` | ≥ 0, ≤ 100 | Context use at which the segment turns to the error colour. |
+| `ttsr.enabled` | TTSR | `true` | bool | Check every Edit/Write against trigger rules. |
+| `ttsr.interruptMode` | TTSR | `"always"` | `always` `tool-only` `never` `prose-only` | Default for rules without their own: always/tool-only deny the edit, never reminds after it. |
+| `ttsr.repeatMode` | TTSR | `"once"` | `once` `after-gap` | A rule fires once per session, or again after a gap of completed turns. |
+| `ttsr.repeatGap` | TTSR | `10` | ≥ 1, ≤ 1000 | Completed turns before an after-gap rule may fire again. |
+| `rules.builtin` | Rules | `true` | bool | Load the rules vendored from oh-my-pi. |
+| `rules.disabled` | Rules | `[]` | names | Rule names to drop. |
+| `advisor.enabled` | Advisor | `false` | bool | Review turns that edited files. (stored by `/advisor`, not config.json) |
+| `advisor.model` | Advisor | none | string | Reviewer model id; empty reuses the session through a cached fork. (stored by `/advisor`, not config.json) |
+| `advisor.budgetUsd` | Advisor | none | ≥ 0 | The advisor turns itself off once total spend reaches this; empty for none. (stored by `/advisor`, not config.json) |
+| `append.enabled` | Context | `true` | bool | Append .agents/mods/APPEND_SYSTEM.md to the system prompt. |
+| `agentsMd.enabled` | Context | `true` | bool | Load AGENTS.md files beside CLAUDE.md. |
+<!-- settings:end -->
+
+`advisor.prices` (`{ "<model>": { input, output, cacheRead, cacheWrite } }`, USD per MTok)
+overrides the built-in price table.
+
+## Status line themes
+
+`statusline.theme` takes any of the 102 themes vendored from oh-my-pi (`dark`, `light`,
+`dark-tokyo-night`, `dark-catppuccin`, `light-solarized`, …; the `/omp` pane lists them all) or a
+custom theme file `.agents/mods/themes/<name>.json` in any layer:
+
+```json
+{ "extends": "dark-nord", "vars": { "hot": "#ff5f87" }, "colors": { "statusLineModel": "hot" } }
+```
+
+Colours are `#rrggbb`, an xterm index `0`–`255`, or a name from `vars`. Tokens:
+`statusLineBg, statusLineSep, statusLineModel, statusLinePath, statusLineGitClean,
+statusLineGitDirty, statusLineContext, statusLineSpend, statusLineOutput, statusLineCost,
+statusLineCaveman, accent, success, warning, error, dim`. Missing tokens come from `extends`
+(or `dark`). Output is truecolor when `COLORTERM` is `truecolor`/`24bit`, otherwise the nearest
+256-colour.
+
+Segments: `model, caveman, mode, path, git, pr, session, tokens, cost, fiveHour, ctx`.
+Separators: `powerline` (filled, on `statusLineBg`), `powerline-thin`, `slash`, `pipe`,
+`block`, `none`, `ascii`. Icons: `nerd`, `ascii`, `none`.
 
 ## Rule format
 
