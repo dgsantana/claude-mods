@@ -14,6 +14,7 @@ export type StatusInput = {
   }
   vim?: { mode?: string }
   pr?: { number?: number; review_state?: string }
+  rate_limits?: { five_hour?: { used_percentage?: number; resets_at?: number } }
 }
 
 import type { Caveman } from './caveman'
@@ -32,6 +33,7 @@ const ICON = {
   tokens: '',
   cost: '',
   ctx: '',
+  limit: '\u{f051f}',
 }
 
 const color = (code: number, text: string) => `\x1b[38;5;${code}m${text}\x1b[0m`
@@ -102,11 +104,27 @@ function ctx(i: StatusInput): Seg {
   return color(code, `${ICON.ctx} ${Math.round(pct)}%`)
 }
 
+export function formatDuration(ms: number): string {
+  const min = Math.floor(ms / 60_000)
+  if (min < 1) return '<1m'
+  const h = Math.floor(min / 60)
+  return h > 0 ? `${h}h${String(min % 60).padStart(2, '0')}m` : `${min}m`
+}
+
+function fiveHour(i: StatusInput, now: number): Seg {
+  const w = i.rate_limits?.five_hour
+  if (typeof w?.used_percentage !== 'number') return undefined
+  const left = Math.max(0, Math.round(100 - w.used_percentage))
+  let text = `${ICON.limit} ${left}% left`
+  if (typeof w.resets_at === 'number' && w.resets_at * 1000 > now) text += ` · ${formatDuration(w.resets_at * 1000 - now)}`
+  return color(left < 20 ? 203 : left < 50 ? 179 : 114, text)
+}
+
 const join = (segs: Seg[]) => segs.filter((s): s is string => s !== undefined).join(` ${dim(SEP)} `)
 
-export function render(input: StatusInput, opts: { git: GitInfo | undefined; caveman?: Caveman }): string {
+export function render(input: StatusInput, opts: { git: GitInfo | undefined; caveman?: Caveman; now?: number }): string {
   const i = input ?? {}
   const left = join([model(i), caveman(opts.caveman), mode(i), path(i), git(opts.git), pr(i)])
-  const right = join([session(i), tokens(i), cost(i), ctx(i)])
+  const right = join([session(i), tokens(i), cost(i), fiveHour(i, opts.now ?? Date.now()), ctx(i)])
   return [left, right].filter(Boolean).join(`  ${dim(SEP + SEP)}  `)
 }

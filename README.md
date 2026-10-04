@@ -11,7 +11,7 @@ plus a nerd-font **status line**.
 | Rules | omp-format rule files: `alwaysApply` rules go into the system prompt, described rules form a rulebook index |
 | TTSR | Time Traveling Stream Rules, tool scope: rules checked against every `Edit`/`Write`; a reminder after the result, or a deny before it |
 | Advisor | Optional reviewer of turns that edited files; you accept or ignore its note; spend tracking and a budget |
-| Status line | omp `nerd`-style powerline line: model, caveman badge, mode, path, git, PR · session, tokens, cost, context % |
+| Status line | omp `nerd`-style powerline line: model, caveman badge, mode, path, git, PR · session, tokens, cost, 5-hour usage left, context % |
 
 Works on Linux and Windows. Nothing reads omp's own `~/.omp` files; omp is not required.
 
