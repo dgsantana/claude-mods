@@ -2,10 +2,13 @@
 
 import { parseFrontmatter } from './frontmatter'
 import type { InterruptMode, Rule } from './rule'
+import { schemaDefaults } from './settings-schema'
+import type { StatuslineConfig } from './statusline-config'
 
 export type Price = { input: number; output: number; cacheRead: number; cacheWrite: number }
 
 export type Config = {
+  statusline: StatuslineConfig
   rules: { builtin: boolean; disabled: string[] }
   ttsr: {
     enabled: boolean
@@ -24,10 +27,7 @@ export type Config = {
 }
 
 export const DEFAULT_CONFIG: Config = {
-  rules: { builtin: true, disabled: [] },
-  ttsr: { enabled: true, interruptMode: 'always', repeatMode: 'once', repeatGap: 10 },
-  append: { enabled: true },
-  agentsMd: { enabled: true },
+  ...schemaDefaults(),
   advisor: { enabled: false, prices: {} },
 }
 
