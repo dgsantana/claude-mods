@@ -1,7 +1,6 @@
-// Discovers the layers on disk through a small Io interface; `ioFrom($)`
-// backs it with the engine, tests back it with memory.
+// Discovers the layers on disk through a small Io interface; register.ts
+// backs it with the engine (`$` may not cross an import), tests with memory.
 
-import type { EngineInterface } from 'claude-code'
 import { type Config, mergeAppend, mergeConfig, mergeRules } from './layers'
 import { chainBetween, join, samePath } from './paths'
 import { type Rule, type RuleSource, ruleFromMarkdown } from './rule'
@@ -76,38 +75,4 @@ export async function discover(
 
   const config = mergeConfig(configs)
   return { config, rules: mergeRules(ruleLayers, config), append: mergeAppend(appends), layers, warnings }
-}
-
-export function ioFrom($: EngineInterface): Io {
-  return {
-    env: async name => (name === 'HOME' ? $.env.get('HOME') : $.env.get('USERPROFILE')),
-    read: async path => {
-      try {
-        if (!(await $.fs.exists(path))) return undefined
-        const text = await $.fs.read(path)
-        return typeof text === 'string' ? text : undefined
-      } catch {
-        return undefined
-      }
-    },
-    listMarkdown: async dir => {
-      try {
-        if (!(await $.fs.exists(dir))) return []
-        const entries = await $.fs.list(dir)
-        return entries
-          .filter(e => e.kind === 'file' && /\.mdc?$/i.test(e.name))
-          .map(e => e.name)
-          .sort()
-      } catch {
-        return []
-      }
-    },
-  }
-}
-
-export async function loadAll($: EngineInterface): Promise<Snapshot> {
-  const repo = await $.session.repo().catch(() => null)
-  const cwd = await $.session.cwd()
-  const root = repo?.root ?? (await $.session.root())
-  return discover(ioFrom($), { builtinDir: join($.plugin.root, 'builtin-rules'), root, cwd })
 }
