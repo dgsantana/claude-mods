@@ -11,7 +11,7 @@ plus a nerd-font **status line**.
 | Rules | omp-format rule files: `alwaysApply` rules go into the system prompt, described rules form a rulebook index |
 | TTSR | Time Traveling Stream Rules, tool scope: rules checked against every `Edit`/`Write`; a reminder after the result, or a deny before it |
 | Advisor | Optional reviewer of turns that edited files; you accept or ignore its note; spend tracking and a budget |
-| Status line | omp `nerd`-style powerline line: model, mode, path, git, PR · session, tokens, cost, context % |
+| Status line | omp `nerd`-style powerline line: model, caveman badge, mode, path, git, PR · session, tokens, cost, context % |
 
 Works on Linux and Windows. Nothing reads omp's own `~/.omp` files; omp is not required.
 
@@ -28,6 +28,10 @@ Status line (needs [Bun](https://bun.sh)): clone the repo, then
 bun statusline/install.ts           # prints the settings.json snippet
 bun statusline/install.ts --write   # writes it into ~/.claude/settings.json (keeps a .bak)
 ```
+
+If the [caveman](https://github.com/JuliusBrussee/caveman) plugin is active, the status line shows its
+mode badge and savings (read from `~/.claude/.caveman-active`, same checks as caveman's own script),
+so you can replace caveman's status line with this one without losing it.
 
 Optional, for AST-based TTSR rules: [ast-grep](https://ast-grep.github.io/) on `PATH`
 (`mise use -g ast-grep`, `scoop install ast-grep`, or `cargo install ast-grep`). Without it

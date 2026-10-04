@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 // Claude Code statusLine command: reads the session JSON on stdin, prints one line.
 
+import { cavemanDir, readCaveman } from './caveman'
 import { gitInfo } from './git'
 import { render, type StatusInput } from './segments'
 
@@ -9,4 +10,6 @@ try {
   input = JSON.parse(await Bun.stdin.text()) as StatusInput
 } catch {}
 const cwd = input.workspace?.current_dir ?? input.cwd
-process.stdout.write(render(input, { git: cwd ? gitInfo(cwd) : undefined }))
+process.stdout.write(
+  render(input, { git: cwd ? gitInfo(cwd) : undefined, caveman: readCaveman(cavemanDir(process.env), process.env) }),
+)

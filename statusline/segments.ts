@@ -16,6 +16,8 @@ export type StatusInput = {
   pr?: { number?: number; review_state?: string }
 }
 
+import type { Caveman } from './caveman'
+
 export type GitInfo = { branch: string; dirty: boolean; ahead: number; behind: number }
 
 export const SEP = ''
@@ -48,6 +50,13 @@ type Seg = string | undefined
 function model(i: StatusInput): Seg {
   const name = i.model?.display_name ?? i.model?.id
   return name ? color(141, `${ICON.model} ${name}`) : undefined
+}
+
+function caveman(c: Caveman | undefined): Seg {
+  if (!c) return undefined
+  let text = `🪨 ${c.mode || 'CAVEMAN'}`
+  if (c.savings) text += ` ⛏ ${c.savings}`
+  return color(172, text)
 }
 
 function mode(i: StatusInput): Seg {
@@ -95,9 +104,9 @@ function ctx(i: StatusInput): Seg {
 
 const join = (segs: Seg[]) => segs.filter((s): s is string => s !== undefined).join(` ${dim(SEP)} `)
 
-export function render(input: StatusInput, opts: { git: GitInfo | undefined }): string {
+export function render(input: StatusInput, opts: { git: GitInfo | undefined; caveman?: Caveman }): string {
   const i = input ?? {}
-  const left = join([model(i), mode(i), path(i), git(opts.git), pr(i)])
+  const left = join([model(i), caveman(opts.caveman), mode(i), path(i), git(opts.git), pr(i)])
   const right = join([session(i), tokens(i), cost(i), ctx(i)])
   return [left, right].filter(Boolean).join(`  ${dim(SEP + SEP)}  `)
 }
