@@ -1,0 +1,11 @@
+{
+  "rules": { "builtin": true, "disabled": ["rs-parking-lot"] },
+  "ttsr": { "enabled": true, "interruptMode": "always", "repeatMode": "after-gap", "repeatGap": 10 },
+  "append": { "enabled": true },
+  "agentsMd": { "enabled": true },
+  "advisor": {
+    "enabled": false,
+    "budgetUsd": 5,
+    "prices": { "claude-opus-5-5": { "input": 4, "output": 20, "cacheRead": 0.2, "cacheWrite": 5 } }
+  }
+}
