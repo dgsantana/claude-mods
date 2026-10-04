@@ -79,3 +79,24 @@ export type PreviewSegment = { id: SegmentId; text: string; colour: string }
 export function previewSegments(config: StatuslineConfig, theme: ResolvedTheme): PreviewSegment[] {
   return [...config.left, ...config.right].map(id => ({ id, text: SAMPLE[id], colour: toHex(theme[SEGMENT_TOKEN[id]]) }))
 }
+
+// Engine Selects take at most this many options.
+export const SELECT_MAX = 64
+
+export type ThemeGroup = { label: string; names: string[] }
+
+// Themes split into families (dark, light, other) for a two-step picker; a
+// family larger than a Select allows is paged.
+export function themeGroups(names: readonly string[]): ThemeGroup[] {
+  const family = (n: string) => (n === 'dark' || n.startsWith('dark-') ? 'dark' : n === 'light' || n.startsWith('light-') ? 'light' : 'other')
+  const out: ThemeGroup[] = []
+  for (const label of ['dark', 'light', 'other']) {
+    const list = [...names].filter(n => family(n) === label).sort()
+    if (list.length === 0) continue
+    const pages = Math.ceil(list.length / SELECT_MAX)
+    for (let p = 0; p < pages; p++) {
+      out.push({ label: pages > 1 ? `${label} ${p + 1}/${pages}` : label, names: list.slice(p * SELECT_MAX, (p + 1) * SELECT_MAX) })
+    }
+  }
+  return out
+}

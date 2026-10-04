@@ -60,6 +60,9 @@ All four must pass before a commit that touches `plugins/` or `statusline/`.
 - `$.command.register` throws for a name a built-in owns (e.g. `/advisor`), and the test kit does
   not reproduce that. Register each command in its own try/catch, and never hook `command.run`
   for a built-in's name. omp-port's commands live under `/omp`.
+- `Select` takes 1–64 options. The test kit does not check this (or other paint-time limits):
+  after changing a pane, open it in a real session (`tmux` + `claude --plugin-dir plugins/omp-port
+  --debug-file <f>`) and grep the log for `does not validate`.
 
 ## Engine test conventions
 

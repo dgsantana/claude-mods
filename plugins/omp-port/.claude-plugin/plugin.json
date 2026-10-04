@@ -1,6 +1,6 @@
 {
   "name": "omp-port",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "oh-my-pi features for Claude Code: TTSR, layered rules, AGENTS.md, APPEND_SYSTEM, advisor",
   "types": "./types/index.d.ts",
   "author": {

@@ -99,3 +99,26 @@ describe('previewSegments', () => {
     expect(p[1]?.text).toContain('Opus')
   })
 })
+
+import { themeGroups } from '../hooks/pane-model'
+
+describe('themeGroups (Select allows at most 64 options)', () => {
+  const BUILTIN = JSON.parse(readFileSync(join(import.meta.dir, '..', 'themes', 'builtin.json'), 'utf8'))
+  test('every group has 1 to 64 themes and every theme is in exactly one group', () => {
+    const names = [...Object.keys(BUILTIN), 'mine', 'zz-custom']
+    const groups = themeGroups(names)
+    for (const g of groups) {
+      expect(g.names.length).toBeGreaterThan(0)
+      expect(g.names.length).toBeLessThanOrEqual(64)
+    }
+    expect(groups.flatMap(g => g.names).sort()).toEqual([...names].sort())
+    expect(groups.length).toBeLessThanOrEqual(64)
+  })
+  test('families: dark, light, other; an oversized family is paged', () => {
+    const labels = themeGroups(['dark', 'dark-a', 'light', 'light-b', 'onyx']).map(g => g.label)
+    expect(labels).toEqual(['dark', 'light', 'other'])
+    const many = Array.from({ length: 130 }, (_, i) => `dark-${String(i).padStart(3, '0')}`)
+    const paged = themeGroups(many)
+    expect(paged.map(g => g.label)).toEqual(['dark 1/3', 'dark 2/3', 'dark 3/3'])
+  })
+})

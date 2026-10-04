@@ -215,3 +215,26 @@ test('status line config and theme warnings show on the Status line tab (I-5)', 
   expect(await pane.find({ text: /drak/ })).toBeDefined()
   expect(await pane.find({ text: /bogus/ })).toBeDefined()
 })
+
+test('with the real theme count every Select stays within 64 options', async ($, on) => {
+  const many: Record<string, Record<string, string>> = {}
+  for (let i = 0; i < 60; i++) many[`dark-t${i}`] = { statusLineModel: '#111111' }
+  for (let i = 0; i < 45; i++) many[`light-t${i}`] = { statusLineModel: '#222222' }
+  many.dark = { statusLineModel: '#333333' }
+  world(on, { themes: many })
+  mock.store(on, {})
+  on('ui.render', () => null as never)
+  const pane = await $.ui.mount(PANE)
+  const selects: { props?: Record<string, unknown> }[] = []
+  const walk = (n: unknown) => {
+    if (!n || typeof n !== 'object') return
+    const node = n as { type?: string; props?: Record<string, unknown>; children?: unknown[] }
+    if (node.type === 'Select') selects.push(node)
+    for (const c of node.children ?? []) walk(c)
+  }
+  walk(await pane.drawn())
+  expect(selects.length).toBeGreaterThan(0)
+  for (const s of selects) expect((s.props?.options as unknown[]).length).toBeLessThanOrEqual(64)
+  await pane.select({ key: 'set-statusline.theme-group', value: 'light' })
+  expect(await pane.find({ key: 'set-statusline.theme' })).toBeDefined()
+})

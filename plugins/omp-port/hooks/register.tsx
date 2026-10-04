@@ -6,7 +6,7 @@ import { costUsd, parseVerdict, priceOrFallback, reviewPrompt } from './advisor'
 import { addAgentsMd } from './agentsmd'
 import { setPath, unsetPath } from './config-patch'
 import { discover, homeDir, type Io, type Snapshot } from './load'
-import { paneRows, parseListInput, previewSegments, projectLayerDir, rulesRows, segmentsEdit } from './pane-model'
+import { paneRows, parseListInput, previewSegments, projectLayerDir, rulesRows, SELECT_MAX, segmentsEdit, themeGroups } from './pane-model'
 import { isWindowsPath, join } from './paths'
 import { renderRulesSection } from './rules'
 import { SEGMENT_IDS, type SegmentId, SETTINGS, type Setting, TABS, type Tab, validate } from './settings-schema'
@@ -322,6 +322,7 @@ const PANE_ID = 'omp-port-settings'
 const PANE_TAB = { plugin: 'omp-port', key: 'paneTab' } as const
 const PANE_SCOPE = { plugin: 'omp-port', key: 'paneScope' } as const
 const PANE_ERROR = { plugin: 'omp-port', key: 'paneError' } as const
+const PANE_THEME_GROUP = { plugin: 'omp-port', key: 'paneThemeGroup' } as const
 
 let themeTable: Record<string, Record<string, string>> | undefined
 
@@ -538,6 +539,7 @@ export const register: Register = on => {
     const tab: Tab = (await $.state.get(PANE_TAB)).value ?? 'statusline'
     const scope = (await $.state.get(PANE_SCOPE)).value ?? 'global'
     const error = (await $.state.get(PANE_ERROR)).value
+    const themeGroup = (await $.state.get(PANE_THEME_GROUP)).value
     let snap: Snapshot
     try {
       snap = await snapshot($)
@@ -557,10 +559,28 @@ export const register: Register = on => {
         case 'bool':
           return <Button key={key} label={value ? '[x] on' : '[ ] off'} onPress={() => writeSetting($, s, !value)} />
         case 'enum':
-        case 'theme': {
-          const options = s.kind === 'enum' ? s.options : themes.includes(String(value)) ? themes : [String(value), ...themes]
           return (
-            <Select key={key} options={options.map(o => ({ value: o }))} value={String(value)} onSelect={(v: string) => writeSetting($, s, v)} />
+            <Select key={key} options={s.options.map(o => ({ value: o }))} value={String(value)} onSelect={(v: string) => writeSetting($, s, v)} />
+          )
+        case 'theme': {
+          // Two steps: a family, then a theme in it (a Select takes at most SELECT_MAX options).
+          const groups = themeGroups(themes.includes(String(value)) ? themes : [String(value), ...themes])
+          const group = groups.find(g => g.label === themeGroup) ?? groups.find(g => g.names.includes(String(value))) ?? groups[0]
+          return (
+            <Box key={key + '-box'} gap={1}>
+              <Select
+                key={`${key}-group`}
+                options={groups.slice(0, SELECT_MAX).map(g => ({ value: g.label }))}
+                value={group?.label}
+                onSelect={(v: string) => $.state.set(PANE_THEME_GROUP, v)}
+              />
+              <Select
+                key={key}
+                options={(group?.names ?? [String(value)]).map(o => ({ value: o }))}
+                value={group?.names.includes(String(value)) ? String(value) : undefined}
+                onSelect={(v: string) => writeSetting($, s, v)}
+              />
+            </Box>
           )
         }
         case 'segments': {

@@ -18,6 +18,7 @@ declare module 'claude-code' {
       paneTab: PaneTab
       paneScope: PaneScope
       paneError: PaneError | null
+      paneThemeGroup: string | null
     }
   }
 }
