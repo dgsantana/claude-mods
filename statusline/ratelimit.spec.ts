@@ -1,5 +1,11 @@
 import { describe, expect, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { resolveTheme } from '../plugins/omp-port/hooks/themes'
+import { nearest256 } from './ansi'
 import { formatDuration, render } from './segments'
+
+const DARK = resolveTheme('dark', JSON.parse(readFileSync(join(import.meta.dir, '..', 'plugins', 'omp-port', 'themes', 'builtin.json'), 'utf8')), {}).theme
 
 const strip = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, '')
 const NOW = 1_800_000_000_000
@@ -19,9 +25,9 @@ describe('5-hour usage segment', () => {
   })
   test('colour follows what is left', () => {
     const at = (used: number) => render({ rate_limits: { five_hour: { used_percentage: used } } }, { git: undefined, now: NOW })
-    expect(at(10)).toContain('38;5;114m')
-    expect(at(60)).toContain('38;5;179m')
-    expect(at(90)).toContain('38;5;203m')
+    expect(at(10)).toContain(`38;5;${nearest256(DARK.success)}m`)
+    expect(at(60)).toContain(`38;5;${nearest256(DARK.warning)}m`)
+    expect(at(90)).toContain(`38;5;${nearest256(DARK.error)}m`)
   })
   test('absent or past reset: segment without countdown; absent window: no segment', () => {
     expect(strip(render({ rate_limits: { five_hour: { used_percentage: 50, resets_at: NOW / 1000 - 5 } } }, { git: undefined, now: NOW }))).toContain('50% left')
