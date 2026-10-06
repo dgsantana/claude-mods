@@ -6,11 +6,27 @@ import { costUsd, parseVerdict, priceOrFallback, reviewPrompt } from './advisor'
 import { addAgentsMd } from './agentsmd'
 import { setPath, unsetPath } from './config-patch'
 import { discover, homeDir, type Io, type Snapshot } from './load'
-import { paneRows, parseListInput, previewSegments, projectLayerDir, rulesRows, SELECT_MAX, segmentsEdit, themeGroups } from './pane-model'
+import {
+  hintFor,
+  labelWidth,
+  paneGroups,
+  paneRows,
+  parseListInput,
+  PREVIEW_DATA,
+  projectLayerDir,
+  rulesRows,
+  SELECT_MAX,
+  type SegmentLists,
+  segmentMove,
+  segmentRows,
+  segmentSide,
+  segmentToggle,
+  themeGroups,
+} from './pane-model'
 import { isWindowsPath, join } from './paths'
 import { renderRulesSection } from './rules'
 import { parseCaveman, parsePorcelain, type RateWindow, type StatusData, statusSpans, type TurnDelta } from './status'
-import { SEGMENT_IDS, type SegmentId, SETTINGS, type Setting, TABS, type Tab, validate } from './settings-schema'
+import { SETTINGS, type Setting, settingsFor, TABS, type Tab, validate } from './settings-schema'
 import { sanitizeStatusline, type StatuslineConfig } from './statusline-config'
 import { listThemes, resolveTheme } from './themes'
 import {
@@ -326,6 +342,7 @@ const PANE_TAB = { plugin: 'agent-cockpit', key: 'paneTab' } as const
 const PANE_SCOPE = { plugin: 'agent-cockpit', key: 'paneScope' } as const
 const PANE_ERROR = { plugin: 'agent-cockpit', key: 'paneError' } as const
 const PANE_THEME_GROUP = { plugin: 'agent-cockpit', key: 'paneThemeGroup' } as const
+const PANE_FOCUS = { plugin: 'agent-cockpit', key: 'paneFocus' } as const
 
 let themeTable: Record<string, Record<string, string>> | undefined
 
@@ -426,6 +443,23 @@ async function resetSetting($: EngineInterface, setting: Setting): Promise<void>
   await patchLayer($, setting, text => unsetPath(text, setting.key))
 }
 
+// The two segment lists change together, in one write of the chosen layer.
+const SEGMENTS_SETTING = SETTINGS.find(s => s.key === 'statusline.left') as Setting
+
+async function writeSegments($: EngineInterface, lists: SegmentLists): Promise<void> {
+  await patchLayer($, SEGMENTS_SETTING, text => {
+    const left = setPath(text, 'statusline.left', lists.left)
+    return 'error' in left ? left : setPath(left.text, 'statusline.right', lists.right)
+  })
+}
+
+async function resetSegments($: EngineInterface): Promise<void> {
+  await patchLayer($, SEGMENTS_SETTING, text => {
+    const left = unsetPath(text, 'statusline.left')
+    return 'error' in left ? left : unsetPath(left.text, 'statusline.right')
+  })
+}
+
 async function setScope($: EngineInterface, scope: 'global' | 'project'): Promise<void> {
   if (scope === 'project') {
     const targets = await paneTargets($, await snapshot($))
@@ -446,6 +480,7 @@ async function paneExtras(
   statusline: StatuslineConfig,
   builtin: Record<string, Record<string, string>>,
   e: Parameters<EngineInterface['ui']['resolve']>[0],
+  columns: number | undefined,
 ) {
   const { Box, Button, Text } = $.ui.resolve(e)
   if (tab === 'statusline') {
@@ -454,11 +489,15 @@ async function paneExtras(
     for (const w of warnings) warnOnce($, w)
     return (
       <Box flexDirection="column">
-        <Box gap={1} flexWrap="wrap">
-          <Text dimColor>preview</Text>
-          {previewSegments(statusline, resolved.theme).map(seg => (
-            <Text color={seg.colour}>{seg.text}</Text>
-          ))}
+        <Box flexDirection="row" flexWrap="nowrap" overflow="hidden">
+          {(() => {
+            const { left, middle, right } = statusSpans(PREVIEW_DATA, statusline, resolved.theme, columns)
+            return [...left, ...middle, ...right].map(s => (
+              <Text color={s.color} backgroundColor={s.backgroundColor} wrap="truncate">
+                {s.text}
+              </Text>
+            ))
+          })()}
         </Box>
         {warnings.map(w => (
           <Text color="yellow">{`⚠ ${w}`}</Text>
@@ -675,6 +714,7 @@ export const register: Register = on => {
     const scope = (await $.state.get(PANE_SCOPE)).value ?? 'global'
     const error = (await $.state.get(PANE_ERROR)).value
     const themeGroup = (await $.state.get(PANE_THEME_GROUP)).value
+    const hint = hintFor((await $.state.get(PANE_FOCUS)).value ?? undefined)
     let snap: Snapshot
     try {
       snap = await snapshot($)
@@ -686,13 +726,18 @@ export const register: Register = on => {
     const builtin = await builtinThemes($)
     const themes = listThemes(builtin, snap.themeSpecs)
     const statusline = sanitizeStatusline(snap.config.statusline).config
-    const extra = await paneExtras($, tab, snap, statusline, builtin, e)
+    // The preview stops a cell short of the pane's frame.
+    const columns = e.props.bodyColumns === undefined ? undefined : e.props.bodyColumns - 1
+    const extra = await paneExtras($, tab, snap, statusline, builtin, e, columns)
+    const groups = paneGroups(settingsFor(tab))
+    const lw = labelWidth(groups.flatMap(g => g.settings))
+    const rowOf = new Map(rows.map(r => [r.setting.key, r]))
 
     const control = (s: Setting, value: unknown) => {
       const key = `set-${s.key}`
       switch (s.kind) {
         case 'bool':
-          return <Button key={key} label={value ? '[x] on' : '[ ] off'} onPress={() => writeSetting($, s, !value)} />
+          return <Button key={key} label={value ? '[x] on' : '[ ] off'} plain onPress={() => writeSetting($, s, !value)} />
         case 'enum':
           return (
             <Select key={key} options={s.options.map(o => ({ value: o }))} value={String(value)} onSelect={(v: string) => writeSetting($, s, v)} />
@@ -703,44 +748,20 @@ export const register: Register = on => {
           const group = groups.find(g => g.label === themeGroup) ?? groups.find(g => g.names.includes(String(value))) ?? groups[0]
           return (
             <Box key={key + '-box'} gap={1}>
+              <Text dimColor>family</Text>
               <Select
                 key={`${key}-group`}
                 options={groups.slice(0, SELECT_MAX).map(g => ({ value: g.label }))}
                 value={group?.label}
                 onSelect={(v: string) => $.state.set(PANE_THEME_GROUP, v)}
               />
+              <Text dimColor>theme</Text>
               <Select
                 key={key}
                 options={(group?.names ?? [String(value)]).map(o => ({ value: o }))}
                 value={group?.names.includes(String(value)) ? String(value) : undefined}
                 onSelect={(v: string) => writeSetting($, s, v)}
               />
-            </Box>
-          )
-        }
-        case 'segments': {
-          const list = (Array.isArray(value) ? value : []) as SegmentId[]
-          const used = new Set([...statusline.left, ...statusline.right])
-          const free = SEGMENT_IDS.filter(id => !used.has(id))
-          const edit = (op: Parameters<typeof segmentsEdit>[1]) => writeSetting($, s, segmentsEdit(list, op))
-          return (
-            <Box key={key} gap={1} flexWrap="wrap">
-              {list.map(id => (
-                <Box key={`seg-${s.key}-${id}`}>
-                  <Text>{id}</Text>
-                  <Button key={`seg-${s.key}-${id}-up`} label="↑" plain onPress={() => edit({ up: id })} />
-                  <Button key={`seg-${s.key}-${id}-down`} label="↓" plain onPress={() => edit({ down: id })} />
-                  <Button key={`seg-${s.key}-${id}-remove`} label="✕" plain onPress={() => edit({ remove: id })} />
-                </Box>
-              ))}
-              {free.length > 0 ? (
-                <Select
-                  key={`seg-${s.key}-add`}
-                  label="+ add"
-                  options={free.map(id => ({ value: id }))}
-                  onSelect={(v: string) => edit({ add: v as SegmentId })}
-                />
-              ) : null}
             </Box>
           )
         }
@@ -756,6 +777,30 @@ export const register: Register = on => {
           return <Input key={key} value={value === undefined ? '' : String(value)} onSubmit={(v: string) => writeSetting($, s, v)} />
       }
     }
+
+    // The segment table: every segment, on or off, its side and its order.
+    const lists: SegmentLists = { left: statusline.left, right: statusline.right }
+    const segOrigin = rows.find(r => r.setting.kind === 'segments' && r.origin !== 'default')?.origin
+    const segmentTable = (
+      <Box key="group-segments" flexDirection="column">
+        <Box gap={1}>
+          <Text bold color="suggestion">Segments</Text>
+          {segOrigin ? <Text dimColor>{`· ${segOrigin}`}</Text> : null}
+          {segOrigin ? <Button key="reset-segments" label="reset" plain onPress={() => resetSegments($)} /> : null}
+        </Box>
+        {segmentRows(lists).map(r => (
+          <Box key={`segrow-${r.id}`} gap={1}>
+            <Box width={lw}>
+              <Text dimColor={r.side === null}>{r.id}</Text>
+            </Box>
+            <Button key={`seg-on-${r.id}`} label={r.side ? '[x]' : '[ ]'} plain onPress={() => writeSegments($, segmentToggle(lists, r.id))} />
+            {r.side ? <Button key={`seg-side-${r.id}`} label={r.side} plain onPress={() => writeSegments($, segmentSide(lists, r.id))} /> : null}
+            {r.side ? <Button key={`seg-up-${r.id}`} label="↑" plain onPress={() => writeSegments($, segmentMove(lists, r.id, 'up'))} /> : null}
+            {r.side ? <Button key={`seg-down-${r.id}`} label="↓" plain onPress={() => writeSegments($, segmentMove(lists, r.id, 'down'))} /> : null}
+          </Box>
+        ))}
+      </Box>
+    )
 
     return (
       <Box flexDirection="column">
@@ -783,19 +828,42 @@ export const register: Register = on => {
           <Text dimColor>{(scope === 'project' ? targets.project : targets.global) ?? ''}</Text>
         </Box>
         {extra}
-        {rows.map(row => (
-          <Box key={`row-${row.setting.key}`} flexDirection="column">
-            <Box gap={1}>
-              <Text bold>{row.setting.label}</Text>
-              {control(row.setting, row.value)}
-              <Text dimColor>({row.origin})</Text>
-              <Button key={`reset-${row.setting.key}`} label="reset" plain onPress={() => resetSetting($, row.setting)} />
-            </Box>
-            {error?.key === row.setting.key ? <Text color="red">{error.text}</Text> : <Text dimColor>{row.setting.description}</Text>}
+        {groups.map((g, gi) => (
+          <Box key={`group-${gi}`} flexDirection="column">
+            {g.title ? <Text bold color="suggestion">{g.title}</Text> : null}
+            {g.settings.map(setting => {
+              const row = rowOf.get(setting.key)
+              const isSet = row !== undefined && row.origin !== 'default'
+              return (
+                <Box key={`row-${setting.key}`} flexDirection="column">
+                  <Box gap={1}>
+                    <Box width={lw}>
+                      <Text>{setting.label}</Text>
+                    </Box>
+                    {control(setting, row?.value)}
+                    {isSet ? <Text dimColor>{`· ${row.origin}`}</Text> : null}
+                    {isSet ? <Button key={`reset-${setting.key}`} label="reset" plain onPress={() => resetSetting($, setting)} /> : null}
+                  </Box>
+                  {error?.key === setting.key ? <Text color="red">{error.text}</Text> : null}
+                </Box>
+              )
+            })}
+            {tab === 'statusline' && g.title === 'Look' ? segmentTable : null}
           </Box>
         ))}
+        {hint ? <Text dimColor>{hint}</Text> : null}
       </Box>
     )
+  })
+
+  // The pane's hint line describes whatever holds the focus ring.
+  on('ui.focus', { requestId: PANE_ID }, async ($, e, next) => {
+    try {
+      await $.state.set(PANE_FOCUS, e.element ?? null)
+    } catch (err) {
+      warnOnce($, `pane focus not tracked (${errText(err)})`)
+    }
+    return next(e)
   })
 
   on('prompt.submit', async ($, e, next) => {

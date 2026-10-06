@@ -5,9 +5,8 @@ import { getPath } from './config-patch'
 import type { Config } from './layers'
 import type { ConfigLayer, Layer } from './load'
 import type { Rule } from './rule'
-import { type SegmentId, type Setting, settingsFor, type Tab } from './settings-schema'
-import type { StatuslineConfig } from './statusline-config'
-import { type ResolvedTheme, type ThemeToken, toHex } from './themes'
+import { SEGMENT_IDS, type SegmentId, type Setting, SETTINGS, settingsFor, type Tab } from './settings-schema'
+import type { StatusData } from './status'
 
 export type Origin = 'default' | 'global' | 'project' | 'store'
 export type PaneRow = { setting: Setting; value: unknown; origin: Origin }
@@ -64,21 +63,94 @@ export function rulesRows(rules: readonly Rule[], cfg: Config['rules']): RuleRow
     }))
 }
 
-const SAMPLE: Record<SegmentId, string> = {
-  model: 'Opus', caveman: 'ULTRA', path: 'project', git: 'main*', tokens: '12.8k', cost: '$0.42', fiveHour: '77% left', ctx: '31%', duration: '26m',
-  sha: '01a0fde', sevenDay: '82% left', delta: '+$0.12', activity: 'ttsr 1',
+// The segment table: every segment once, the shown ones first (the left side
+// in order, then the right), then the hidden ones in catalogue order.
+export type SegmentLists = { left: SegmentId[]; right: SegmentId[] }
+export type SegmentRow = { id: SegmentId; side: 'L' | 'R' | null }
+
+export function segmentRows(lists: SegmentLists): SegmentRow[] {
+  const shown = new Set([...lists.left, ...lists.right])
+  return [
+    ...lists.left.map(id => ({ id, side: 'L' as const })),
+    ...lists.right.map(id => ({ id, side: 'R' as const })),
+    ...SEGMENT_IDS.filter(id => !shown.has(id)).map(id => ({ id, side: null })),
+  ]
 }
 
-export const SEGMENT_TOKEN: Record<SegmentId, ThemeToken> = {
-  model: 'statusLineModel', caveman: 'statusLineCaveman', path: 'statusLinePath', git: 'statusLineGitDirty',
-  tokens: 'statusLineOutput', cost: 'statusLineCost', fiveHour: 'success', ctx: 'statusLineContext', duration: 'dim',
-  sha: 'dim', sevenDay: 'success', delta: 'statusLineSpend', activity: 'accent',
+// On: off removes it from its side; a hidden segment joins the right side.
+export function segmentToggle(lists: SegmentLists, id: SegmentId): SegmentLists {
+  if (lists.left.includes(id) || lists.right.includes(id)) {
+    return { left: lists.left.filter(s => s !== id), right: lists.right.filter(s => s !== id) }
+  }
+  return { left: [...lists.left], right: [...lists.right, id] }
 }
 
-export type PreviewSegment = { id: SegmentId; text: string; colour: string }
+export function segmentSide(lists: SegmentLists, id: SegmentId): SegmentLists {
+  if (lists.left.includes(id)) return { left: lists.left.filter(s => s !== id), right: [...lists.right, id] }
+  if (lists.right.includes(id)) return { left: [...lists.left, id], right: lists.right.filter(s => s !== id) }
+  return { left: [...lists.left], right: [...lists.right] }
+}
 
-export function previewSegments(config: StatuslineConfig, theme: ResolvedTheme): PreviewSegment[] {
-  return [...config.left, ...config.right].map(id => ({ id, text: SAMPLE[id], colour: toHex(theme[SEGMENT_TOKEN[id]]) }))
+export function segmentMove(lists: SegmentLists, id: SegmentId, dir: 'up' | 'down'): SegmentLists {
+  const op = dir === 'up' ? { up: id } : { down: id }
+  return { left: segmentsEdit(lists.left, op), right: segmentsEdit(lists.right, op) }
+}
+
+export type PaneGroup = { title?: string; settings: Setting[] }
+
+// A tab's settings by heading, in catalogue order; segment lists are drawn as
+// the table instead.
+export function paneGroups(settings: readonly Setting[]): PaneGroup[] {
+  const out: PaneGroup[] = []
+  for (const setting of settings) {
+    if (setting.kind === 'segments') continue
+    const last = out[out.length - 1]
+    if (last && last.title === setting.group) last.settings.push(setting)
+    else out.push({ title: setting.group, settings: [setting] })
+  }
+  return out
+}
+
+export function labelWidth(settings: readonly Setting[]): number {
+  return Math.max(0, ...settings.map(s => s.label.length)) + 1
+}
+
+const SEGMENT_HINTS: Record<string, string> = {
+  'seg-on-': 'Turn this segment on or off; one turned on joins the right side.',
+  'seg-side-': 'Move this segment to the end of the other side.',
+  'seg-up-': 'Change its order within its side.',
+  'seg-down-': 'Change its order within its side.',
+}
+
+// The hint line under the pane: what the control holding the focus does.
+export function hintFor(element: string | undefined): string | undefined {
+  if (!element) return undefined
+  if (element === 'reset-segments') return 'Back to the default segments and order.'
+  const seg = Object.keys(SEGMENT_HINTS).find(p => element.startsWith(p))
+  if (seg) return SEGMENT_HINTS[seg]
+  const setting = SETTINGS.find(
+    s => element === `set-${s.key}` || element === `set-${s.key}-group` || element === `reset-${s.key}`,
+  )
+  return setting?.description
+}
+
+// Sample readings for the pane's preview, one for every segment.
+export const PREVIEW_DATA: StatusData = {
+  model: 'claude-opus-5-5[1m]',
+  cwd: '/home/u/project',
+  home: '/home/u',
+  git: { branch: 'main', dirty: true, ahead: 1, behind: 0, sha: '01a0fde', staged: 2, unstaged: 1, untracked: 3 },
+  caveman: { mode: 'ULTRA' },
+  tokens: 128_400,
+  percent: 43,
+  window: 1_000_000,
+  usd: 0.42,
+  fiveHour: { percentUsed: 23 },
+  sevenDay: { percentUsed: 18 },
+  startedAt: 0,
+  lastTurn: { usd: 0.12, tokens: 9_800 },
+  activity: { ttsrHits: 1 },
+  now: 26 * 60_000,
 }
 
 // Engine Selects take at most this many options.

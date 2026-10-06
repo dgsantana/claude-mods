@@ -42,36 +42,38 @@ export type Setting = {
   description: string
   default: unknown
   storage?: 'config' | 'store'
+  // A heading the /dgs pane draws the setting under.
+  group?: string
 } & SettingKind
 
 export const SETTINGS: readonly Setting[] = [
-  { key: 'statusline.enabled', tab: 'statusline', label: 'Enabled', kind: 'bool', default: true,
+  { key: 'statusline.enabled', tab: 'statusline', group: 'Look', label: 'Enabled', kind: 'bool', default: true,
     description: 'Draw the status line in the band above the prompt.' },
-  { key: 'statusline.theme', tab: 'statusline', label: 'Theme', kind: 'theme', default: 'dark',
+  { key: 'statusline.theme', tab: 'statusline', group: 'Look', label: 'Theme', kind: 'theme', default: 'dark',
     description: 'Colour theme: one of the 102 omp themes or a custom one from .agents/mods/themes/.' },
-  { key: 'statusline.separator', tab: 'statusline', label: 'Separator', kind: 'enum', options: SEPARATORS, default: 'powerline-thin',
+  { key: 'statusline.separator', tab: 'statusline', group: 'Look', label: 'Separator', kind: 'enum', options: SEPARATORS, default: 'powerline-thin',
     description: 'How segments are separated; powerline draws filled segments on the theme background.' },
-  { key: 'statusline.fill', tab: 'statusline', label: 'Fill', kind: 'enum', options: FILLS, default: 'gauge',
+  { key: 'statusline.fill', tab: 'statusline', group: 'Look', label: 'Fill', kind: 'enum', options: FILLS, default: 'gauge',
     description: 'The room between the sides: a context gauge, blank space pushing the right side to the edge, or nothing.' },
-  { key: 'statusline.icons', tab: 'statusline', label: 'Icons', kind: 'enum', options: ICON_SETS, default: 'nerd',
+  { key: 'statusline.icons', tab: 'statusline', group: 'Look', label: 'Icons', kind: 'enum', options: ICON_SETS, default: 'nerd',
     description: 'Nerd Font glyphs, short ASCII labels, or no icons.' },
-  { key: 'statusline.left', tab: 'statusline', label: 'Left segments', kind: 'segments',
+  { key: 'statusline.left', tab: 'statusline', group: 'Segments', label: 'Left segments', kind: 'segments',
     default: ['model', 'caveman', 'path', 'git', 'sha'], description: 'Segments on the left, in order.' },
-  { key: 'statusline.right', tab: 'statusline', label: 'Right segments', kind: 'segments',
+  { key: 'statusline.right', tab: 'statusline', group: 'Segments', label: 'Right segments', kind: 'segments',
     default: ['activity', 'delta', 'tokens', 'cost', 'fiveHour', 'sevenDay', 'duration'], description: 'Segments on the right, in order.' },
-  { key: 'statusline.path.style', tab: 'statusline', label: 'Path style', kind: 'enum', options: PATH_STYLES, default: 'basename',
+  { key: 'statusline.path.style', tab: 'statusline', group: 'Look', label: 'Path style', kind: 'enum', options: PATH_STYLES, default: 'basename',
     description: 'Folder name only, the full path, or the path relative to home (~).' },
-  { key: 'statusline.git.aheadBehind', tab: 'statusline', label: 'Git ahead/behind', kind: 'bool', default: true,
+  { key: 'statusline.git.aheadBehind', tab: 'statusline', group: 'Git', label: 'Git ahead/behind', kind: 'bool', default: true,
     description: 'Show ↑/↓ commit counts against the upstream branch.' },
-  { key: 'statusline.git.counts', tab: 'statusline', label: 'Git file counts', kind: 'bool', default: true,
+  { key: 'statusline.git.counts', tab: 'statusline', group: 'Git', label: 'Git file counts', kind: 'bool', default: true,
     description: 'Show staged (+), unstaged (~) and untracked (?) file counts; off shows a * when dirty.' },
-  { key: 'statusline.fiveHour.showReset', tab: 'statusline', label: '5h reset time', kind: 'bool', default: true,
+  { key: 'statusline.fiveHour.showReset', tab: 'statusline', group: 'Limits', label: '5h reset time', kind: 'bool', default: true,
     description: 'Show the time until the 5-hour usage window resets.' },
-  { key: 'statusline.sevenDay.showReset', tab: 'statusline', label: '7d reset time', kind: 'bool', default: true,
+  { key: 'statusline.sevenDay.showReset', tab: 'statusline', group: 'Limits', label: '7d reset time', kind: 'bool', default: true,
     description: 'Show the time until the weekly usage window resets.' },
-  { key: 'statusline.ctx.warnAt', tab: 'statusline', label: 'Context warn %', kind: 'number', min: 0, max: 100, default: 50,
+  { key: 'statusline.ctx.warnAt', tab: 'statusline', group: 'Thresholds', label: 'Context warn %', kind: 'number', min: 0, max: 100, default: 50,
     description: 'Context use at which the segment turns to the warning colour.' },
-  { key: 'statusline.ctx.errorAt', tab: 'statusline', label: 'Context error %', kind: 'number', min: 0, max: 100, default: 80,
+  { key: 'statusline.ctx.errorAt', tab: 'statusline', group: 'Thresholds', label: 'Context error %', kind: 'number', min: 0, max: 100, default: 80,
     description: 'Context use at which the segment turns to the error colour.' },
 
   { key: 'ttsr.enabled', tab: 'ttsr', label: 'Enabled', kind: 'bool', default: true,

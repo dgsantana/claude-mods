@@ -56,6 +56,7 @@ declare module 'claude-code' {
       paneScope: PaneScope
       paneError: PaneError | null
       paneThemeGroup: string | null
+      paneFocus: string | null
       statusData: StatusData | null
       ttsrHits: number
       turnBase: TurnDelta | null

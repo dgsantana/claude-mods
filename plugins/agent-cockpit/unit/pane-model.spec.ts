@@ -52,10 +52,10 @@ describe('parseListInput', () => {
 
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { previewSegments, rulesRows, segmentsEdit } from '../hooks/pane-model'
+import { rulesRows, segmentsEdit } from '../hooks/pane-model'
 import type { Rule } from '../hooks/rule'
 import { schemaDefaults } from '../hooks/settings-schema'
-import { resolveTheme, toHex } from '../hooks/themes'
+import { resolveTheme } from '../hooks/themes'
 
 describe('segmentsEdit', () => {
   const L = ['model', 'path', 'git'] as const
@@ -88,15 +88,81 @@ describe('rulesRows', () => {
   })
 })
 
-describe('previewSegments', () => {
-  const BUILTIN = JSON.parse(readFileSync(join(import.meta.dir, '..', 'themes', 'builtin.json'), 'utf8'))
-  test('follows left then right order, coloured from the theme', () => {
-    const config = { ...schemaDefaults().statusline, left: ['path', 'model'] as const, right: ['cost'] as const }
-    const theme = resolveTheme('dark', BUILTIN, {}).theme
-    const p = previewSegments({ ...config, left: [...config.left], right: [...config.right] }, theme)
-    expect(p.map(s => s.id)).toEqual(['path', 'model', 'cost'])
-    expect(p[1]?.colour).toBe(toHex(theme.statusLineModel))
-    expect(p[1]?.text).toContain('Opus')
+import {
+  hintFor,
+  labelWidth,
+  paneGroups,
+  PREVIEW_DATA,
+  segmentMove,
+  segmentRows,
+  segmentSide,
+  segmentToggle,
+} from '../hooks/pane-model'
+import { SEGMENT_IDS, settingsFor } from '../hooks/settings-schema'
+import { statusSpans } from '../hooks/status'
+
+describe('segment table', () => {
+  const LISTS = { left: ['model', 'path'], right: ['cost', 'duration'] } as const
+  const lists = () => ({ left: [...LISTS.left], right: [...LISTS.right] })
+  test('rows: left in order, then right, then the rest in catalogue order', () => {
+    const rows = segmentRows(lists())
+    expect(rows.slice(0, 4)).toEqual([
+      { id: 'model', side: 'L' },
+      { id: 'path', side: 'L' },
+      { id: 'cost', side: 'R' },
+      { id: 'duration', side: 'R' },
+    ])
+    expect(rows.slice(4).every(r => r.side === null)).toBe(true)
+    expect(rows.map(r => r.id).sort()).toEqual([...SEGMENT_IDS].sort())
+  })
+  test('toggle: off appends to the right side, on removes it', () => {
+    expect(segmentToggle(lists(), 'git')).toEqual({ left: ['model', 'path'], right: ['cost', 'duration', 'git'] })
+    expect(segmentToggle(lists(), 'path')).toEqual({ left: ['model'], right: ['cost', 'duration'] })
+  })
+  test('side: moves to the end of the other side; an off segment is left alone', () => {
+    expect(segmentSide(lists(), 'model')).toEqual({ left: ['path'], right: ['cost', 'duration', 'model'] })
+    expect(segmentSide(lists(), 'cost')).toEqual({ left: ['model', 'path', 'cost'], right: ['duration'] })
+    expect(segmentSide(lists(), 'git')).toEqual(lists())
+  })
+  test('move: within its side, ends stay put', () => {
+    expect(segmentMove(lists(), 'path', 'up')).toEqual({ left: ['path', 'model'], right: ['cost', 'duration'] })
+    expect(segmentMove(lists(), 'model', 'up')).toEqual(lists())
+    expect(segmentMove(lists(), 'cost', 'down')).toEqual({ left: ['model', 'path'], right: ['duration', 'cost'] })
+    expect(segmentMove(lists(), 'duration', 'down')).toEqual(lists())
+  })
+})
+
+describe('pane layout', () => {
+  test('status line rows come in groups, segment lists left to the table', () => {
+    const groups = paneGroups(settingsFor('statusline'))
+    expect(groups.map(g => g.title)).toEqual(['Look', 'Git', 'Limits', 'Thresholds'])
+    expect(groups.flatMap(g => g.settings).some(s => s.kind === 'segments')).toBe(false)
+    expect(groups[0]?.settings.map(s => s.key)).toContain('statusline.theme')
+  })
+  test('tabs without groups are one untitled group', () => {
+    const groups = paneGroups(settingsFor('ttsr'))
+    expect(groups).toHaveLength(1)
+    expect(groups[0]?.title).toBeUndefined()
+  })
+  test('label width fits the longest label plus a space', () => {
+    const settings = settingsFor('ttsr')
+    expect(labelWidth(settings)).toBe(Math.max(...settings.map(s => s.label.length)) + 1)
+  })
+  test('hints: a setting or its reset names the setting; segment controls explain the table', () => {
+    expect(hintFor('set-statusline.fill')).toMatch(/context gauge/)
+    expect(hintFor('reset-statusline.fill')).toMatch(/context gauge/)
+    expect(hintFor('seg-on-git')).toMatch(/on or off/)
+    expect(hintFor('seg-side-git')).toMatch(/other side/)
+    expect(hintFor('seg-up-git')).toMatch(/order/)
+    expect(hintFor('tab-rules')).toBeUndefined()
+    expect(hintFor(undefined)).toBeUndefined()
+  })
+  test('preview data fills every segment', () => {
+    const config = { ...schemaDefaults().statusline, left: ['model'], right: [...SEGMENT_IDS].filter(id => id !== 'model') } as never
+    const BUILTIN = JSON.parse(readFileSync(join(import.meta.dir, '..', 'themes', 'builtin.json'), 'utf8'))
+    const { left, right } = statusSpans(PREVIEW_DATA, config, resolveTheme('dark', BUILTIN, {}).theme)
+    const text = [...left, ...right].map(s => s.text).join('')
+    for (const word of ['Opus', 'ULTRA', 'main', '01a0fde', 'left', 'ttsr']) expect(text).toContain(word)
   })
 })
 

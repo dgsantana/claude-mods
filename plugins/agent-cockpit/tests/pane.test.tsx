@@ -46,7 +46,7 @@ test('project scope writes the repo file and the origin label follows', async ($
   await pane.press({ key: 'scope-project' })
   await pane.select({ key: 'set-statusline.theme', value: 'dark-nord' })
   expect(JSON.parse(w.writes[PROJECT] ?? '{}')).toEqual({ statusline: { theme: 'dark-nord' } })
-  expect(await pane.find({ text: /\(project\)/ })).toBeDefined()
+  expect(await pane.find({ text: /· project/ })).toBeDefined()
 })
 
 test('reset removes the key from the chosen layer', async ($, on) => {
@@ -122,17 +122,52 @@ function texts(tree: unknown, out: Node[] = []): Node[] {
 }
 const textOf = (n: Node): string => (n.children ?? []).map(c => (typeof c === 'string' ? c : '')).join('')
 
-test('segments editor: up, remove and add write the list', async ($, on) => {
-  const w = world(on, { themes: THEMES, files: { [GLOBAL]: '{"statusline":{"left":["model","path","git"]}}' } })
+test('segment table: reorder, switch side and toggle write both lists in one file', async ($, on) => {
+  const w = world(on, { themes: THEMES, files: { [GLOBAL]: '{"statusline":{"left":["model","path","git"],"right":["cost"]}}' } })
   mock.store(on, {})
   on('ui.render', () => null as never)
   const pane = await $.ui.mount(PANE)
-  await pane.press({ key: 'seg-statusline.left-path-up' })
-  expect(JSON.parse(w.writes[GLOBAL] ?? '{}').statusline.left).toEqual(['path', 'model', 'git'])
-  await pane.press({ key: 'seg-statusline.left-git-remove' })
-  expect(JSON.parse(w.writes[GLOBAL] ?? '{}').statusline.left).toEqual(['path', 'model'])
-  await pane.select({ key: 'seg-statusline.left-add', value: 'caveman' })
-  expect(JSON.parse(w.writes[GLOBAL] ?? '{}').statusline.left).toEqual(['path', 'model', 'caveman'])
+  const saved = () => JSON.parse(w.writes[GLOBAL] ?? '{}').statusline
+  await pane.press({ key: 'seg-up-path' })
+  expect(saved()).toEqual({ left: ['path', 'model', 'git'], right: ['cost'] })
+  await pane.press({ key: 'seg-side-git' })
+  expect(saved()).toEqual({ left: ['path', 'model'], right: ['cost', 'git'] })
+  await pane.press({ key: 'seg-on-model' })
+  expect(saved()).toEqual({ left: ['path'], right: ['cost', 'git'] })
+  await pane.press({ key: 'seg-on-sha' })
+  expect(saved()).toEqual({ left: ['path'], right: ['cost', 'git', 'sha'] })
+})
+
+test('segment table reset removes both lists from the chosen layer', async ($, on) => {
+  const w = world(on, { themes: THEMES, files: { [GLOBAL]: '{"statusline":{"left":["model"],"right":["cost"],"icons":"ascii"}}' } })
+  mock.store(on, {})
+  on('ui.render', () => null as never)
+  const pane = await $.ui.mount(PANE)
+  await pane.press({ key: 'reset-segments' })
+  expect(JSON.parse(w.writes[GLOBAL] ?? '{}')).toEqual({ statusline: { icons: 'ascii' } })
+})
+
+test('reset and origin show only on rows a layer sets', async ($, on) => {
+  world(on, { themes: THEMES, files: { [GLOBAL]: '{"statusline":{"icons":"ascii"}}' } })
+  mock.store(on, {})
+  on('ui.render', () => null as never)
+  const pane = await $.ui.mount(PANE)
+  expect(await pane.find({ key: 'reset-statusline.icons' })).toBeDefined()
+  expect(await pane.find({ key: 'reset-statusline.theme' })).toBeUndefined()
+  expect(await pane.find({ text: /\(default\)/ })).toBeUndefined()
+  expect(await pane.find({ text: /· global/ })).toBeDefined()
+})
+
+test('rows sit under group headings; one hint line follows the focus', async ($, on) => {
+  world(on, { themes: THEMES })
+  mock.store(on, {})
+  on('ui.render', () => null as never)
+  on('ui.focus', () => ({}))
+  const pane = await $.ui.mount(PANE)
+  for (const heading of [/^Look$/, /^Segments/, /^Git$/, /^Limits$/, /^Thresholds$/]) expect(await pane.find({ text: heading })).toBeDefined()
+  expect(await pane.find({ text: /context gauge/ })).toBeUndefined()
+  await $.ui.focus({ component: 'Pane', requestId: 'agent-cockpit-settings', element: 'set-statusline.fill', origin: { kind: 'person' } } as never)
+  expect(await pane.find({ text: /context gauge/ })).toBeDefined()
 })
 
 test('preview follows the layout and recolours with the theme', async ($, on) => {
@@ -237,4 +272,18 @@ test('with the real theme count every Select stays within 64 options', async ($,
   for (const s of selects) expect((s.props?.options as unknown[]).length).toBeLessThanOrEqual(64)
   await pane.select({ key: 'set-statusline.theme-group', value: 'light' })
   expect(await pane.find({ key: 'set-statusline.theme' })).toBeDefined()
+})
+
+test('toggles are drawn plain, headings in the theme accent, the preview a cell short of the edge', async ($, on) => {
+  world(on, { themes: THEMES })
+  mock.store(on, {})
+  on('ui.render', () => null as never)
+  const pane = await $.ui.mount({ ...PANE, props: { bodyColumns: 60 } as never })
+  const toggle = await pane.find({ key: 'set-statusline.enabled' })
+  expect(toggle?.props.plain).toBe(true)
+  expect(toggle?.props.label).toBe('[x] on')
+  expect((await pane.find({ text: /^Look$/ }))?.props.color).toBe('suggestion')
+  const preview = (await pane.findAll({ type: 'Box' })).find(b => b.props.overflow === 'hidden')
+  expect(preview).toBeDefined()
+  expect([...(preview?.text ?? '')].length).toBeLessThanOrEqual(59)
 })

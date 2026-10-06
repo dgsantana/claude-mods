@@ -83,6 +83,8 @@ agent-switchboard repository (`docs/reference/snapshot-format.md`); change it th
   engine resolves `/home/u` as `D:/home/u`; `tests/world.ts` drops the drive when matching.
 - Use `mock.env`, `mock.store`, `mock.clock` from `claude-code/testing`; `clock.settle()` runs
   work scheduled with `$.clock.after`.
+- The pane's hint line follows `ui.focus`; a test that moves the focus answers it with
+  `on('ui.focus', () => ({}))` and dispatches `$.ui.focus({ component, requestId, element, origin })`.
 
 ## Conventions
 
