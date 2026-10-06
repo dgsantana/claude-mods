@@ -152,3 +152,17 @@ describe('the question a permission prompt shows on the board', () => {
     expect(permissionQuestion('Bash', null)).toBe('Allow Bash?')
   })
 })
+
+describe('what the session last said', () => {
+  test("a turn's final answer is kept, with when it was said", () => {
+    const s = next(fresh(), { type: 'turn_ended', said: 'All tests pass.', at: T0 + 5 })
+    expect(s.lastSaid).toEqual({ text: 'All tests pass.', at: T0 + 5 })
+  })
+
+  test('a turn with nothing to say keeps the last thing said', () => {
+    let s = next(fresh(), { type: 'turn_ended', said: 'Done.', at: T0 + 5 })
+    s = next(s, { type: 'turn_ended', said: '  ', at: T0 + 9 })
+    s = next(s, { type: 'turn_ended', at: T0 + 12 })
+    expect(s.lastSaid).toEqual({ text: 'Done.', at: T0 + 5 })
+  })
+})

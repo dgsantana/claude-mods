@@ -1,7 +1,7 @@
 import type { On } from 'claude-code'
 import { type Engine, expect, mock, test } from 'claude-code/testing'
 
-type Fake = { id: string; usd: number; failWrites: boolean; files: Map<string, string> }
+type Fake = { id: string; usd: number; failWrites: boolean; files: Map<string, string>; settings?: string }
 
 // The world beneath the mod: one session, its spend, an environment and a file system that records
 // writes. On Windows the engine resolves `/home/u` as `D:/home/u`, so paths are compared without it.
@@ -17,6 +17,11 @@ function world(on: On, env: Record<string, string> = { HOME: '/home/u' }) {
     fake.files.set(e.path.replace(/\\/g, '/').replace(/^[A-Za-z]:/, ''), e.text)
     return { value: undefined }
   })
+  on('fs.read', ($, e) =>
+    fake.settings !== undefined && e.path.replace(/\\/g, '/').endsWith('/.agent-switchboard/settings.json')
+      ? { value: fake.settings }
+      : { deny: `ENOENT ${e.path}` },
+  )
   on('session.start', ($, e) => ({ cwd: e.cwd }))
   on('session.end', ($, e) => ({ sessionId: e.sessionId }))
   on('turn.start', ($, e) => ({ turnId: e.turnId }) as never)
@@ -93,11 +98,11 @@ async function openCall($: Engine, on: On, w: ReturnType<typeof world>, agentId?
   }
 }
 
-test('a call still undecided 15 seconds after its check answered ask is a prompt waiting on the human', async ($, on) => {
+test('a call still undecided 10 seconds after its check answered ask is a prompt waiting on the human', async ($, on) => {
   const w = world(on)
   const finish = await openCall($, on, w)
   const askedAt = w.clock.now()
-  await w.clock.advance(14_900)
+  await w.clock.advance(9_900)
   expect(w.snapshot().state).toBe('running')
   await w.clock.advance(200)
   expect(w.snapshot()).toMatchObject({ state: 'waiting', openAsk: { question: 'Allow Bash: git push?', count: 1 } })
@@ -107,13 +112,24 @@ test('a call still undecided 15 seconds after its check answered ask is a prompt
   expect(w.snapshot().state).toBe('running')
 })
 
-test('a call decided within 15 seconds, as auto mode decides, never shows as waiting', async ($, on) => {
+test('a call decided within 10 seconds, as auto mode decides, never shows as waiting', async ($, on) => {
   const w = world(on)
   const finish = await openCall($, on, w)
-  await w.clock.advance(11_000)
+  await w.clock.advance(9_000)
   await finish()
   await w.clock.advance(10_000)
   expect(w.snapshot().state).toBe('running')
+})
+
+test("the delay is the board's setting, board.promptDelaySeconds", async ($, on) => {
+  const w = world(on)
+  w.fake.settings = JSON.stringify({ board: { promptDelaySeconds: 3 } })
+  const finish = await openCall($, on, w)
+  await w.clock.advance(2_900)
+  expect(w.snapshot().state).toBe('running')
+  await w.clock.advance(200)
+  expect(w.snapshot().state).toBe('waiting')
+  await finish()
 })
 
 // The "run in background" pill is drawn only while an allowed Bash command runs.
@@ -131,7 +147,7 @@ test('a long command that starts running after approval stops waiting, though it
   await finish()
 })
 
-test('a command already running when the 15 seconds pass never shows as waiting', async ($, on) => {
+test('a command already running when the delay passes never shows as waiting', async ($, on) => {
   const w = world(on)
   on('ui.render', () => h('Text', null, 'pill') as never)
   const finish = await openCall($, on, w)
@@ -212,4 +228,14 @@ test('a failed write never reaches the session: the tool still runs and answers'
   const r = await $.tool.call({ tool: 'Bash', tool_use_id: 'b', command: 'ls' } as never)
   expect(r).toMatchObject({ result: { ok: true } })
   await $.turn.complete(DONE)
+})
+
+test("what the session last said: the main loop's answer, never a subagent's", async ($, on) => {
+  const w = world(on)
+  await $.session.start(START)
+  await $.turn.start({ text: 'go', turnId: 't' } as never)
+  await $.turn.complete({ ...DONE, answer: 'Subagent chatter', agentId: 'sub' } as never)
+  expect(w.snapshot().lastSaid).toBeUndefined()
+  await $.turn.complete({ ...DONE, answer: 'All tests pass now.' })
+  expect(w.snapshot().lastSaid).toMatchObject({ text: 'All tests pass now.' })
 })

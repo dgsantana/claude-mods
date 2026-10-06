@@ -8,7 +8,7 @@ import type { SessionState } from './state'
 export const SNAPSHOT_FORMAT_VERSION = 1
 
 /** Character limits for free text, including the ellipsis that marks a cut. */
-export const LIMITS = { question: 300, todoCurrent: 120, path: 1024, id: 128 } as const
+export const LIMITS = { question: 300, todoCurrent: 120, path: 1024, id: 128, lastSaid: 400 } as const
 
 export interface Snapshot {
   formatVersion: typeof SNAPSHOT_FORMAT_VERSION
@@ -23,6 +23,8 @@ export interface Snapshot {
   openAsk?: { question: string; count: number; since: string }
   todo?: { closed: number; total: number; current?: string }
   cost: number
+  /** The end of the session's latest answer: where its conclusion is. */
+  lastSaid?: { text: string; at: string }
   endedAt?: string
   endReason?: string
 }
@@ -46,6 +48,11 @@ export function toSnapshot(state: SessionState): Snapshot {
     const todo: NonNullable<Snapshot['todo']> = { closed: state.todo.closed, total: state.todo.total }
     if (state.todo.current !== undefined) todo.current = cut(state.todo.current, LIMITS.todoCurrent)
     snapshot.todo = todo
+  }
+  if (state.lastSaid) {
+    const { text } = state.lastSaid
+    const tail = text.length <= LIMITS.lastSaid ? text : `…${text.slice(text.length - LIMITS.lastSaid + 1)}`
+    snapshot.lastSaid = { text: tail, at: iso(state.lastSaid.at) }
   }
   if (state.ended) {
     snapshot.endedAt = iso(state.ended.at)
@@ -72,6 +79,11 @@ export function agentDirOf(env: Env): string {
 
 /** A session id becomes a file name, so it must not be able to name anything else. */
 const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
+
+/** The board's settings file, which the hub owns; this mod only reads it. */
+export function settingsPathOf(boardHome: string): string {
+  return join(boardHome, 'settings.json')
+}
 
 export function snapshotPathOf(boardHome: string, sessionId: string): string | undefined {
   if (!SAFE_ID.test(sessionId) || sessionId.includes('..')) return undefined

@@ -37,12 +37,14 @@ export interface SessionState {
   cost: number
   lastActivityAt: number
   heartbeatAt: number
+  /** The main loop's final answer of its latest turn that said something. */
+  lastSaid?: { text: string; at: number }
   ended?: { at: number; reason: string }
 }
 
 export type SessionEvent =
   | { type: 'turn_started'; at: number }
-  | { type: 'turn_ended'; at: number }
+  | { type: 'turn_ended'; said?: string; at: number }
   | { type: 'ask_opened'; toolUseId: string; questions: string[]; at: number }
   /** `since`: when the prompt opened, when it is known only later; `at` otherwise. */
   | { type: 'permission_asked'; toolUseId: string; question: string; since?: number; at: number }
@@ -92,10 +94,13 @@ export function next(state: SessionState, event: SessionEvent): SessionState {
       return { ...touched, cost: event.usd }
     case 'turn_started':
       return { ...active, phase: 'running' }
-    case 'turn_ended':
+    case 'turn_ended': {
       // Once the turn has settled nothing can still be asking: an interrupted prompt may end
       // without its tool call ever resolving.
-      return { ...active, phase: 'idle', waiting: [] }
+      const ended: SessionState = { ...active, phase: 'idle', waiting: [] }
+      const said = event.said?.trim()
+      return said ? { ...ended, lastSaid: { text: said, at: event.at } } : ended
+    }
     case 'ask_opened': {
       const [first = ''] = event.questions
       const others = state.waiting.filter(w => w.toolUseId !== event.toolUseId)

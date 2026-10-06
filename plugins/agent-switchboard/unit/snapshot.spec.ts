@@ -75,3 +75,18 @@ describe('where the snapshot goes', () => {
     expect(snapshotPathOf('/b', '')).toBeUndefined()
   })
 })
+
+describe('what the session last said, in the snapshot', () => {
+  test('a long answer keeps its end, where the conclusion is, within 400 characters', () => {
+    const said = `${'a'.repeat(1000)} The fix is in.`
+    const snap = toSnapshot(next(start(), { type: 'turn_ended', said, at: T0 + 1000 }))
+    expect(snap.lastSaid?.text).toHaveLength(400)
+    expect(snap.lastSaid?.text.startsWith('…')).toBe(true)
+    expect(snap.lastSaid?.text.endsWith('The fix is in.')).toBe(true)
+    expect(snap.lastSaid?.at).toBe('2026-10-06T10:00:01.000Z')
+  })
+
+  test('absent until something is said', () => {
+    expect(toSnapshot(start()).lastSaid).toBeUndefined()
+  })
+})
