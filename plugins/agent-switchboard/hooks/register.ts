@@ -1,5 +1,5 @@
-// The one hooks module: turns Claude Code's events into omp-board snapshot files and does nothing
-// else. The engine follows `$` only into functions declared in this file, so every call on `$` lives
+// The one hooks module: turns Claude Code's events into Agent Switchboard snapshot files and does
+// nothing else. The engine follows `$` only into functions declared in this file, so every call on `$` lives
 // here; the rules they feed are in `state.ts` and `snapshot.ts`.
 //
 // This runs inside the user's session. Every hook passes the event on whatever happens to the
@@ -32,7 +32,7 @@ async function report($: EngineInterface, error: unknown): Promise<void> {
   const now = await $.clock.now()
   if (now - lastFailureLogAt < FAILURE_LOG_MS) return
   lastFailureLogAt = now
-  $.ui.log(`omp-board: ${error instanceof Error ? error.message : String(error)}`, { to: 'debug' })
+  $.ui.log(`agent-switchboard: ${error instanceof Error ? error.message : String(error)}`, { to: 'debug' })
 }
 
 /**
@@ -100,7 +100,7 @@ async function apply($: EngineInterface, event: SessionEvent): Promise<void> {
  */
 async function publish($: EngineInterface, state: SessionState): Promise<void> {
   const home = boardHomeOf({
-    OMP_BOARD_HOME: await $.env.get('OMP_BOARD_HOME'),
+    SWITCHBOARD_HOME: await $.env.get('SWITCHBOARD_HOME'),
     USERPROFILE: await $.env.get('USERPROFILE'),
     HOME: await $.env.get('HOME'),
   })

@@ -1,7 +1,7 @@
-// The snapshot file, format version 1, as omp-board's hub reads it: `docs/reference/snapshot-format.md`
-// in the omp-board repository is the contract. Every field is bounded, so a file stays small however
-// long the session runs. `tool` marks the file as this mod's; the hub reads omp's own files only for
-// snapshots without it.
+// The snapshot file, format version 1, as Agent Switchboard's hub reads it:
+// `docs/reference/snapshot-format.md` in the agent-switchboard repository is the contract. Every field
+// is bounded, so a file stays small however long the session runs. `tool` marks the file as this mod's;
+// the hub reads omp's own files only for snapshots without it.
 
 import type { SessionState } from './state'
 
@@ -54,13 +54,13 @@ export function toSnapshot(state: SessionState): Snapshot {
   return snapshot
 }
 
-type Env = { OMP_BOARD_HOME?: string; CLAUDE_CONFIG_DIR?: string; USERPROFILE?: string; HOME?: string }
+type Env = { SWITCHBOARD_HOME?: string; CLAUDE_CONFIG_DIR?: string; USERPROFILE?: string; HOME?: string }
 
-/** The board's data folder: `OMP_BOARD_HOME`, else `.omp-board` in the home folder; none without a home. */
+/** The board's data folder: `SWITCHBOARD_HOME`, else `.agent-switchboard` in the home folder; none without a home. */
 export function boardHomeOf(env: Env): string | undefined {
-  if (env.OMP_BOARD_HOME) return env.OMP_BOARD_HOME
+  if (env.SWITCHBOARD_HOME) return env.SWITCHBOARD_HOME
   const home = env.USERPROFILE ?? env.HOME
-  return home ? join(home, '.omp-board') : undefined
+  return home ? join(home, '.agent-switchboard') : undefined
 }
 
 /** Claude Code's configuration folder, reported as the snapshot's `agentDir`; the hub never reads it. */

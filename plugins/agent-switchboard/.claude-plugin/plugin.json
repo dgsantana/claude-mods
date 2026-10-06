@@ -1,0 +1,10 @@
+{
+  "name": "agent-switchboard",
+  "version": "0.1.0",
+  "description": "Puts Claude Code sessions on Agent Switchboard: publishes each session's state as a snapshot file the board's hub reads",
+  "author": {
+    "name": "Daniel Santana"
+  },
+  "license": "MIT",
+  "repository": "https://github.com/dgsantana/claude-mods"
+}

@@ -5,8 +5,8 @@ Claude Code mods, shared between workstations. Two plugins:
 - **omp-port** brings a handful of [oh-my-pi](https://github.com/can1357/oh-my-pi) (omp) features
   to Claude Code, including omp's nerd-font status line, drawn in the band above the prompt.
   Described below.
-- **omp-board** puts Claude Code sessions on omp-board, a local board for working across many
-  agent sessions at once. See [plugins/omp-board/README.md](plugins/omp-board/README.md).
+- **agent-switchboard** puts Claude Code sessions on Agent Switchboard, a local board for working
+  across many agent sessions at once. See [plugins/agent-switchboard/README.md](plugins/agent-switchboard/README.md).
 
 | Feature | What it does |
 |---|---|
@@ -203,7 +203,7 @@ claude plugin validate . && claude plugin validate plugins/omp-port
 claude --plugin-dir plugins/omp-port        # try it in a session
 ```
 
-The same commands with `plugins/omp-board` cover the second plugin; `bun run test:unit`,
+The same commands with `plugins/agent-switchboard` cover the second plugin; `bun run test:unit`,
 `bun run test:plugin` and `bun run validate` run both.
 
 All engine calls (`$`) live in `plugins/omp-port/hooks/register.tsx`: the engine only follows

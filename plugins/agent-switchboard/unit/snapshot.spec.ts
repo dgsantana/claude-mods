@@ -5,7 +5,7 @@ import { next, startSession } from '../hooks/state'
 const T0 = Date.UTC(2026, 9, 6, 10, 0, 0)
 const start = () => startSession({ sessionId: 's1', cwd: '/repo', agentDir: '/home/u/.claude', pid: 0, cost: 0, at: T0 })
 
-describe('the snapshot, format v1 as the omp-board hub reads it', () => {
+describe('the snapshot, format v1 as the Agent Switchboard hub reads it', () => {
   test('a fresh session: the required fields, tool set, absent values omitted', () => {
     expect(toSnapshot(start())).toEqual({
       formatVersion: 1,
@@ -52,10 +52,10 @@ describe('the snapshot, format v1 as the omp-board hub reads it', () => {
 })
 
 describe('where the snapshot goes', () => {
-  test('the board home is OMP_BOARD_HOME when set, else .omp-board in the home folder', () => {
-    expect(boardHomeOf({ OMP_BOARD_HOME: '/data/board', HOME: '/home/u' })).toBe('/data/board')
-    expect(boardHomeOf({ HOME: '/home/u' })).toBe('/home/u/.omp-board')
-    expect(boardHomeOf({ USERPROFILE: 'C:\\Users\\u' })).toBe('C:\\Users\\u\\.omp-board')
+  test('the board home is SWITCHBOARD_HOME when set, else .agent-switchboard in the home folder', () => {
+    expect(boardHomeOf({ SWITCHBOARD_HOME: '/data/board', HOME: '/home/u' })).toBe('/data/board')
+    expect(boardHomeOf({ HOME: '/home/u' })).toBe('/home/u/.agent-switchboard')
+    expect(boardHomeOf({ USERPROFILE: 'C:\\Users\\u' })).toBe('C:\\Users\\u\\.agent-switchboard')
     expect(boardHomeOf({})).toBeUndefined()
   })
 
@@ -66,8 +66,8 @@ describe('where the snapshot goes', () => {
   })
 
   test('one file per session under sessions/, and only for an id that can name nothing else', () => {
-    expect(snapshotPathOf('/home/u/.omp-board', '8d75d91f-79d0-40f9-96c4-d05bfd6c2936')).toBe(
-      '/home/u/.omp-board/sessions/8d75d91f-79d0-40f9-96c4-d05bfd6c2936.json',
+    expect(snapshotPathOf('/home/u/.agent-switchboard', '8d75d91f-79d0-40f9-96c4-d05bfd6c2936')).toBe(
+      '/home/u/.agent-switchboard/sessions/8d75d91f-79d0-40f9-96c4-d05bfd6c2936.json',
     )
     expect(snapshotPathOf('C:\\b', 'abc')).toBe('C:\\b\\sessions\\abc.json')
     expect(snapshotPathOf('/b', '../escape')).toBeUndefined()

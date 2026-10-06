@@ -1,8 +1,8 @@
-// A Claude Code session's state as omp-board sees it, and the only way it changes.
+// A Claude Code session's state as Agent Switchboard sees it, and the only way it changes.
 //
 // Pure: no `$`, no files, no clock. `register.ts` turns hook events into `SessionEvent`s with the
 // time attached, so every rule here is testable on its own. Times are epoch milliseconds. The omp
-// extension's `state.ts` in the omp-board repository is the model this follows.
+// extension's `state.ts` in the agent-switchboard repository is the model this follows.
 
 import { isRecord } from './guards'
 

@@ -10,9 +10,9 @@
       "description": "oh-my-pi features for Claude Code: TTSR, layered rules, AGENTS.md, APPEND_SYSTEM, advisor"
     },
     {
-      "name": "omp-board",
-      "source": "./plugins/omp-board",
-      "description": "Puts Claude Code sessions on omp-board, the local board for working across many agent sessions"
+      "name": "agent-switchboard",
+      "source": "./plugins/agent-switchboard",
+      "description": "Puts Claude Code sessions on Agent Switchboard, the local board for working across many agent sessions"
     }
   ],
   "metadata": {

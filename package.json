@@ -3,8 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test:unit": "bun test plugins/omp-port/unit plugins/omp-board/unit",
-    "test:plugin": "claude plugin test plugins/omp-port && claude plugin test plugins/omp-board",
-    "validate": "claude plugin validate . && claude plugin validate plugins/omp-port && claude plugin validate plugins/omp-board"
+    "test:unit": "bun test plugins/omp-port/unit plugins/agent-switchboard/unit",
+    "test:plugin": "claude plugin test plugins/omp-port && claude plugin test plugins/agent-switchboard",
+    "validate": "claude plugin validate . && claude plugin validate plugins/omp-port && claude plugin validate plugins/agent-switchboard"
   }
 }

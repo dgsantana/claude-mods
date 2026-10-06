@@ -22,7 +22,7 @@ function world(on: On, env: Record<string, string> = { HOME: '/home/u' }) {
   on('turn.start', ($, e) => ({ turnId: e.turnId }) as never)
   on('turn.complete', ($, e) => ({ text: e.answer }))
   const snapshot = (id = fake.id) => {
-    const text = fake.files.get(`/home/u/.omp-board/sessions/${id}.json`)
+    const text = fake.files.get(`/home/u/.agent-switchboard/sessions/${id}.json`)
     return text === undefined ? undefined : JSON.parse(text)
   }
   return { fake, clock, snapshot }
@@ -164,8 +164,8 @@ test('a /clear ends the session, and the new id gets its own snapshot', async ($
   expect(w.snapshot('sess-1').endReason).toBe('clear')
 })
 
-test('OMP_BOARD_HOME relocates the snapshots', async ($, on) => {
-  const w = world(on, { HOME: '/home/u', OMP_BOARD_HOME: '/data/board' })
+test('SWITCHBOARD_HOME relocates the snapshots', async ($, on) => {
+  const w = world(on, { HOME: '/home/u', SWITCHBOARD_HOME: '/data/board' })
   await $.session.start(START)
   expect([...w.fake.files.keys()]).toEqual(['/data/board/sessions/sess-1.json'])
 })

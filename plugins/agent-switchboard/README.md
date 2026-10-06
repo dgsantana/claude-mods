@@ -1,22 +1,22 @@
-# omp-board for Claude Code
+# Agent Switchboard for Claude Code
 
-Puts Claude Code sessions on omp-board, the local board for working across many agent sessions at
-once. omp sessions publish to the board through omp-board's own omp extension; this mod plays the same
-part inside Claude Code.
+Puts Claude Code sessions on [Agent Switchboard](https://github.com/dgsantana/agent-switchboard), the
+local board for working across many agent sessions at once. omp sessions publish to the board through
+the board's own omp extension; this mod plays the same part inside Claude Code.
 
-It writes one small JSON file per session, `~/.omp-board/sessions/<sessionId>.json`, in omp-board's
-snapshot format v1 with `tool: "claude-code"`. It reads nothing, sends nothing off the machine and calls
+It writes one small JSON file per session, `~/.agent-switchboard/sessions/<sessionId>.json`, in the
+board's snapshot format v1 with `tool: "claude-code"`. It reads nothing, sends nothing off the machine and calls
 no model. The board's hub reads the files.
 
 ## Install
 
 ```sh
 claude plugin marketplace add dgsantana/claude-mods
-claude plugin install omp-board@dgsantana
+claude plugin install agent-switchboard@dgsantana
 ```
 
 Needs Claude Code 2.1.287 or later. A session already running picks it up after `/reload-plugins` or a
-restart. `OMP_BOARD_HOME` moves the board's data folder, as it does for the hub.
+restart. `SWITCHBOARD_HOME` moves the board's data folder, as it does for the hub.
 
 ## What it publishes
 
@@ -49,5 +49,5 @@ again on its next refresh.
 | `hooks/register.ts` | The hooks module; every `$` call lives here |
 | `hooks/state.ts` | The session state machine, pure |
 | `hooks/snapshot.ts` | Snapshot format v1, its limits, and where the file goes |
-| `unit/*.spec.ts` | Unit tests for the pure modules (`bun test plugins/omp-board/unit`) |
-| `tests/*.test.ts` | Hooks against the engine (`claude plugin test plugins/omp-board`) |
+| `unit/*.spec.ts` | Unit tests for the pure modules (`bun test plugins/agent-switchboard/unit`) |
+| `tests/*.test.ts` | Hooks against the engine (`claude plugin test plugins/agent-switchboard`) |
