@@ -5,8 +5,17 @@ local board for working across many agent sessions at once. omp sessions publish
 the board's own omp extension; this mod plays the same part inside Claude Code.
 
 It writes one small JSON file per session, `~/.agent-switchboard/sessions/<sessionId>.json`, in the
-board's snapshot format v1 with `tool: "claude-code"`. It reads nothing, sends nothing off the machine and calls
-no model. The board's hub reads the files.
+board's snapshot format v1 with `tool: "claude-code"`, and the session's full last answer beside it. The
+board's hub reads the files. When the hub is running, the mod also lets the board answer the session's
+prompts and, if the board's settings allow it, send the session new prompts. It sends nothing off the
+machine and calls no model.
+
+| Path in the board folder | Access | What |
+|---|---|---|
+| `sessions/<sessionId>.json` | write | The snapshot (below) |
+| `said/<sessionId>.md` | write | The session's full last answer (below) |
+| `settings.json` | read | The board's settings: `board.promptDelaySeconds` and `board.allowPrompting` |
+| hub on `127.0.0.1:<SWITCHBOARD_PORT>` | HTTP | Open prompts and their answers; prompts written on the board |
 
 ## Install
 
@@ -37,6 +46,13 @@ Subagents publish nothing: every event carrying an `agentId` is ignored. After `
 old session's file is marked ended and the new session id gets its own file on its next event or
 heartbeat.
 
+## The full last answer
+
+After each main-loop turn that said something, the whole answer goes to `said/<sessionId>.md` in the
+board folder, as the model wrote it (Markdown), for the board's project page. An answer over 64 KB keeps
+its last 64 KB, marked with a leading `…`. The snapshot's `lastSaid` holds only the last 400 characters.
+The mod never deletes these files; they stay after the session ends, one per session.
+
 ## Answering from the board
 
 Each open permission prompt and AskUserQuestion is also offered to the board's hub on `127.0.0.1`
@@ -66,6 +82,9 @@ again on its next refresh.
 |---|---|
 | `hooks/register.ts` | The hooks module; every `$` call lives here |
 | `hooks/state.ts` | The session state machine, pure |
-| `hooks/snapshot.ts` | Snapshot format v1, its limits, and where the file goes |
+| `hooks/snapshot.ts` | Snapshot format v1, its limits, and where the snapshot, the last answer and the settings live |
+| `hooks/prompt.ts` | What the mod offers the hub about an open prompt, and what the hub's answer does to the call |
+| `hooks/settings.ts` | The values read from the board's `settings.json`, validated as the hub does |
+| `hooks/guards.ts` | Shared type guard |
 | `unit/*.spec.ts` | Unit tests for the pure modules (`bun test plugins/agent-switchboard/unit`) |
 | `tests/*.test.ts` | Hooks against the engine (`claude plugin test plugins/agent-switchboard`) |

@@ -7,7 +7,9 @@ Claude Code mods, shared between workstations. Two plugins:
   edit advisor. Most of it is ported from [oh-my-pi](https://github.com/can1357/oh-my-pi) (omp).
   Described below.
 - **agent-switchboard** puts Claude Code sessions on Agent Switchboard, a local board for working
-  across many agent sessions at once. See [plugins/agent-switchboard/README.md](plugins/agent-switchboard/README.md).
+  across many agent sessions at once: it publishes each session's state and last answer, lets the
+  board answer the session's prompts and, when the board allows it, send it new ones. See
+  [plugins/agent-switchboard/README.md](plugins/agent-switchboard/README.md).
 
 | Feature | What it does |
 |---|---|
