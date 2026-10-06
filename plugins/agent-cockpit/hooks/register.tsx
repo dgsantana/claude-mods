@@ -35,7 +35,7 @@ const warned = new Set<string>()
 function warnOnce($: EngineInterface, text: string): void {
   if (warned.has(text)) return
   warned.add(text)
-  $.ui.log(`omp-port: ${text}`)
+  $.ui.log(`agent-cockpit: ${text}`)
 }
 
 function ioFrom($: EngineInterface): Io {
@@ -108,14 +108,14 @@ function compiledRules($: EngineInterface, snap: Snapshot): CompiledRule[] {
   return compiled
 }
 
-const REPEAT = { plugin: 'omp-port', key: 'ttsrRepeat' } as const
-const AST_HINTED = { plugin: 'omp-port', key: 'astGrepHinted' } as const
-const TTSR_HITS = { plugin: 'omp-port', key: 'ttsrHits' } as const
+const REPEAT = { plugin: 'agent-cockpit', key: 'ttsrRepeat' } as const
+const AST_HINTED = { plugin: 'agent-cockpit', key: 'astGrepHinted' } as const
+const TTSR_HITS = { plugin: 'agent-cockpit', key: 'ttsrHits' } as const
 
 function astGrepInstallHint(windows: boolean): string {
   return windows
-    ? 'omp-port: ast-grep not found, AST rules skipped. Install: `scoop install ast-grep` or `mise use -g ast-grep`'
-    : 'omp-port: ast-grep not found, AST rules skipped. Install: `mise use -g ast-grep` or `cargo install ast-grep`'
+    ? 'agent-cockpit: ast-grep not found, AST rules skipped. Install: `scoop install ast-grep` or `mise use -g ast-grep`'
+    : 'agent-cockpit: ast-grep not found, AST rules skipped. Install: `mise use -g ast-grep` or `cargo install ast-grep`'
 }
 
 // Runs ast-grep over the candidate text; 'missing' when the binary is absent.
@@ -189,7 +189,7 @@ async function ttsr($: EngineInterface, e: { tool: string }, run: () => Promise<
   if (fired.length === 0) return run()
   await $.state.set(REPEAT, state)
   await $.state.set(TTSR_HITS, ((await $.state.get(TTSR_HITS)).value ?? 0) + fired.length)
-  $.ui.toast(`omp-port TTSR: ${fired.join(', ')}`)
+  $.ui.toast(`agent-cockpit TTSR: ${fired.join(', ')}`)
   if (deny.length > 0) return { deny: [...deny, ...remind].join('\n\n') }
   const result = await run()
   if (result.deny !== undefined) return result
@@ -198,12 +198,12 @@ async function ttsr($: EngineInterface, e: { tool: string }, run: () => Promise<
 
 // Advisor: reviews turns that edited files; the person accepts or ignores
 // its note before the next prompt. Settings live in $.store over config.
-const EDITS = { plugin: 'omp-port', key: 'advisorEdits' } as const
-const NOTE = { plugin: 'omp-port', key: 'advisorNote' } as const
-const DECISION = { plugin: 'omp-port', key: 'advisorDecision' } as const
-const SESSION_USD = { plugin: 'omp-port', key: 'advisorSessionUsd' } as const
-const LAST_ERROR = { plugin: 'omp-port', key: 'advisorLastError' } as const
-const ESTIMATED_FOR = { plugin: 'omp-port', key: 'advisorEstimatedFor' } as const
+const EDITS = { plugin: 'agent-cockpit', key: 'advisorEdits' } as const
+const NOTE = { plugin: 'agent-cockpit', key: 'advisorNote' } as const
+const DECISION = { plugin: 'agent-cockpit', key: 'advisorDecision' } as const
+const SESSION_USD = { plugin: 'agent-cockpit', key: 'advisorSessionUsd' } as const
+const LAST_ERROR = { plugin: 'agent-cockpit', key: 'advisorLastError' } as const
+const ESTIMATED_FOR = { plugin: 'agent-cockpit', key: 'advisorEstimatedFor' } as const
 
 type AdvisorSettings = { enabled: boolean; model?: string; budgetUsd?: number; totalUsd: number }
 
@@ -262,7 +262,7 @@ async function advisorReview($: EngineInterface, files: string[], answer: string
 
   if (!r.isAnswered) {
     await $.state.set(LAST_ERROR, r.reason)
-    $.ui.log(`omp-port: advisor got no review (${r.reason})`)
+    $.ui.log(`agent-cockpit: advisor got no review (${r.reason})`)
     return
   }
   await $.state.set(LAST_ERROR, null)
@@ -321,11 +321,11 @@ async function advisorCommand($: EngineInterface, args: string): Promise<string>
 
 // The /dgs settings pane: tabs over the settings catalogue, writing the
 // global or the project layer's config.json (store-backed rows to $.store).
-const PANE_ID = 'omp-port-settings'
-const PANE_TAB = { plugin: 'omp-port', key: 'paneTab' } as const
-const PANE_SCOPE = { plugin: 'omp-port', key: 'paneScope' } as const
-const PANE_ERROR = { plugin: 'omp-port', key: 'paneError' } as const
-const PANE_THEME_GROUP = { plugin: 'omp-port', key: 'paneThemeGroup' } as const
+const PANE_ID = 'agent-cockpit-settings'
+const PANE_TAB = { plugin: 'agent-cockpit', key: 'paneTab' } as const
+const PANE_SCOPE = { plugin: 'agent-cockpit', key: 'paneScope' } as const
+const PANE_ERROR = { plugin: 'agent-cockpit', key: 'paneError' } as const
+const PANE_THEME_GROUP = { plugin: 'agent-cockpit', key: 'paneThemeGroup' } as const
 
 let themeTable: Record<string, Record<string, string>> | undefined
 
@@ -370,11 +370,11 @@ async function patchLayer(
   const targets = await paneTargets($, snap)
   const target = scope === 'project' ? targets.project : targets.global
   if (!target) {
-    $.ui.toast(`omp-port: no ${scope} config location here`)
+    $.ui.toast(`agent-cockpit: no ${scope} config location here`)
     return
   }
   const fail = async (why: string) => {
-    $.ui.toast(`omp-port: ${target}: ${why}; left unchanged`)
+    $.ui.toast(`agent-cockpit: ${target}: ${why}; left unchanged`)
     await $.state.set(PANE_ERROR, { key: setting.key, text: why })
   }
   // A file that exists but can't be read is never treated as missing.
@@ -430,7 +430,7 @@ async function setScope($: EngineInterface, scope: 'global' | 'project'): Promis
   if (scope === 'project') {
     const targets = await paneTargets($, await snapshot($))
     if (!targets.project) {
-      $.ui.toast('omp-port: "This project" needs a git repository; writing to the global layer')
+      $.ui.toast('agent-cockpit: "This project" needs a git repository; writing to the global layer')
       return
     }
   }
@@ -506,9 +506,9 @@ async function paneExtras(
 // $.state, the AbovePrompt hook draws it. Refreshed at session start, after
 // each main-thread turn and on a timer (git changes, caveman mode, the reset
 // countdown).
-const STATUS_DATA = { plugin: 'omp-port', key: 'statusData' } as const
-const TURN_BASE = { plugin: 'omp-port', key: 'turnBase' } as const
-const LAST_TURN = { plugin: 'omp-port', key: 'lastTurn' } as const
+const STATUS_DATA = { plugin: 'agent-cockpit', key: 'statusData' } as const
+const TURN_BASE = { plugin: 'agent-cockpit', key: 'turnBase' } as const
+const LAST_TURN = { plugin: 'agent-cockpit', key: 'lastTurn' } as const
 const STATUS_TICK_MS = 5000
 let refreshing = false
 let stopTick: (() => void) | undefined
@@ -679,7 +679,7 @@ export const register: Register = on => {
     try {
       snap = await snapshot($)
     } catch (err) {
-      return <Text>omp-port: settings unavailable ({errText(err)})</Text>
+      return <Text>agent-cockpit: settings unavailable ({errText(err)})</Text>
     }
     const targets = await paneTargets($, snap)
     const rows = paneRows(tab, snap, await storeValues($))
@@ -850,13 +850,13 @@ export const register: Register = on => {
       const snap = await snapshot($)
       const added = []
       if (snap.config.append.enabled && snap.append !== '') {
-        added.push({ id: 'omp-port:append', text: snap.append, scope: 'session' as const })
+        added.push({ id: 'agent-cockpit:append', text: snap.append, scope: 'session' as const })
       }
       const rules = renderRulesSection(snap.rules)
-      if (rules !== undefined) added.push({ id: 'omp-port:rules', text: rules, scope: 'session' as const })
+      if (rules !== undefined) added.push({ id: 'agent-cockpit:rules', text: rules, scope: 'session' as const })
       return added.length > 0 ? { ...composed, sections: [...composed.sections, ...added] } : composed
     } catch (err) {
-      $.ui.log(`omp-port: prompt.compose skipped (${errText(err)})`)
+      $.ui.log(`agent-cockpit: prompt.compose skipped (${errText(err)})`)
       return composed
     }
   })
@@ -875,7 +875,7 @@ export const register: Register = on => {
       const global = globalPath && globalText !== undefined ? { path: globalPath, content: globalText } : undefined
       return addAgentsMd(result, found, global)
     } catch (err) {
-      $.ui.log(`omp-port: AGENTS.md skipped (${errText(err)})`)
+      $.ui.log(`agent-cockpit: AGENTS.md skipped (${errText(err)})`)
       return result
     }
   })
@@ -896,7 +896,7 @@ export const register: Register = on => {
         const answer = e.answer
         // Outside this dispatch, so the review never holds up the turn.
         $.clock.after(0, () => {
-          advisorReview($, edits, answer).catch(err => $.ui.log(`omp-port: advisor failed (${errText(err)})`))
+          advisorReview($, edits, answer).catch(err => $.ui.log(`agent-cockpit: advisor failed (${errText(err)})`))
         })
       }
     }

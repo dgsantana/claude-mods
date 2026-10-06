@@ -1,11 +1,11 @@
 #!/usr/bin/env bun
 // Vendors oh-my-pi's built-in themes (MIT) as status-line palettes.
 // Usage: bun scripts/vendor-themes.ts <omp>/packages/tui/src/theme
-// Writes plugins/omp-port/themes/builtin.json: { name: { token: "#rrggbb" } }.
+// Writes plugins/agent-cockpit/themes/builtin.json: { name: { token: "#rrggbb" } }.
 
 import { readdirSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { basename, join } from 'node:path'
-import { THEME_TOKENS, parseColour, toHex, type Colour } from '../plugins/omp-port/hooks/themes'
+import { THEME_TOKENS, parseColour, toHex, type Colour } from '../plugins/agent-cockpit/hooks/themes'
 
 const dir = process.argv[2]
 if (!dir) {
@@ -38,7 +38,7 @@ for (const file of files) {
 }
 
 const sorted = Object.fromEntries(Object.keys(out).sort().map(k => [k, out[k]]))
-const target = join(import.meta.dir, '..', 'plugins', 'omp-port', 'themes', 'builtin.json')
+const target = join(import.meta.dir, '..', 'plugins', 'agent-cockpit', 'themes', 'builtin.json')
 mkdirSync(join(target, '..'), { recursive: true })
 writeFileSync(target, JSON.stringify(sorted, null, 1) + '\n')
 console.log(`wrote ${Object.keys(sorted).length} themes to ${target}`)

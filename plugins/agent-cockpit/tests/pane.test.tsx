@@ -2,7 +2,7 @@ import { expect, mock, test } from 'claude-code/testing'
 import { world } from './world'
 
 const THEMES = { dark: { statusLineModel: '#d787af' }, 'dark-nord': { statusLineModel: '#88c0d0' } }
-const PANE = { plugin: 'omp-port', surface: 'terminal', component: 'Pane', requestId: 'omp-port-settings', props: {} as never } as const
+const PANE = { plugin: 'agent-cockpit', surface: 'terminal', component: 'Pane', requestId: 'agent-cockpit-settings', props: {} as never } as const
 const GLOBAL = '/home/u/.agents/mods/config.json'
 const PROJECT = '/repo/.agents/mods/config.json'
 
@@ -11,7 +11,7 @@ test('/dgs opens the settings pane; /dgs ttsr opens on TTSR', async ($, on) => {
   mock.store(on, {})
   on('ui.render', () => null as never)
   await $.command.run({ command: 'dgs', args: '' } as never)
-  expect(w.opened).toEqual(['omp-port-settings'])
+  expect(w.opened).toEqual(['agent-cockpit-settings'])
   await $.command.run({ command: 'dgs', args: 'ttsr' } as never)
   const pane = await $.ui.mount(PANE)
   expect(await pane.find({ key: 'set-ttsr.enabled' })).toBeDefined()

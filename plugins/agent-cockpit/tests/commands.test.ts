@@ -16,7 +16,7 @@ test('a refused command registration does not stop /dgs from registering', async
   expect(registered).not.toContain('advisor')
 })
 
-test('the built-in /advisor is left alone (no omp-port hook answers it)', async ($, on) => {
+test('the built-in /advisor is left alone (no agent-cockpit hook answers it)', async ($, on) => {
   world(on, {})
   mock.store(on, {})
   on('command.run', ($, e) => ({ text: `engine ran /${e.command}` }))

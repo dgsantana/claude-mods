@@ -1,0 +1,11 @@
+{
+  "name": "agent-cockpit",
+  "version": "0.5.0",
+  "description": "The instruments around each Claude Code session: themed status line, TTSR and layered rules, AGENTS.md and APPEND_SYSTEM, an edit advisor",
+  "types": "./types/index.d.ts",
+  "author": {
+    "name": "Daniel Santana"
+  },
+  "license": "MIT",
+  "repository": "https://github.com/dgsantana/claude-mods"
+}

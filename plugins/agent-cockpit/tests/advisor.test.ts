@@ -67,7 +67,7 @@ test('note: toast, band with Accept/Ignore, accepted note rides the next prompt'
   await editTurn($, w.clock)
   expect(w.toasts.some(t => t.includes('foo() lost its null check.'))).toBe(true)
 
-  const band = await $.ui.mount({ plugin: 'omp-port', surface: 'terminal', component: 'AbovePrompt', props: { hasSurvey: false, isWorking: false, maxRows: 5 } as never })
+  const band = await $.ui.mount({ plugin: 'agent-cockpit', surface: 'terminal', component: 'AbovePrompt', props: { hasSurvey: false, isWorking: false, maxRows: 5 } as never })
   expect(await band.find({ text: /null check/ })).toBeDefined()
   expect(await band.find({ key: 'advisor-accept' })).toBeDefined()
 
@@ -81,7 +81,7 @@ test('note: toast, band with Accept/Ignore, accepted note rides the next prompt'
 test('ignore: the note is dropped from the next prompt', async ($, on) => {
   const w = engine(on, { fork: { reply: 'Bad change.' } })
   await editTurn($, w.clock)
-  const band = await $.ui.mount({ plugin: 'omp-port', surface: 'terminal', component: 'AbovePrompt', props: { hasSurvey: false, isWorking: false, maxRows: 5 } as never })
+  const band = await $.ui.mount({ plugin: 'agent-cockpit', surface: 'terminal', component: 'AbovePrompt', props: { hasSurvey: false, isWorking: false, maxRows: 5 } as never })
   await band.press({ key: 'advisor-ignore' })
   const r = (await $.prompt.submit({ text: 'next', wait: false } as never)) as { context?: string[] }
   expect((r.context ?? []).join('\n')).not.toContain('Bad change.')

@@ -1,10 +1,10 @@
 This repository vendors files from oh-my-pi (https://github.com/can1357/oh-my-pi),
 commit 6d8552d, under the MIT License:
 
-  plugins/omp-port/builtin-rules/*.md
+  plugins/agent-cockpit/builtin-rules/*.md
     from packages/coding-agent/src/discovery/builtin-rules/
 
-  plugins/omp-port/themes/builtin.json
+  plugins/agent-cockpit/themes/builtin.json
     status-line colours extracted from packages/tui/src/theme/{dark,light}.json
     and packages/tui/src/theme/defaults/*.json by scripts/vendor-themes.ts
 

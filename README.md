@@ -2,8 +2,9 @@
 
 Claude Code mods, shared between workstations. Two plugins:
 
-- **omp-port** brings a handful of [oh-my-pi](https://github.com/can1357/oh-my-pi) (omp) features
-  to Claude Code, including omp's nerd-font status line, drawn in the band above the prompt.
+- **agent-cockpit** (formerly omp-port) is the set of instruments around each session: a themed
+  status line above the prompt, TTSR and layered rules, AGENTS.md and APPEND_SYSTEM loading, and an
+  edit advisor. Most of it is ported from [oh-my-pi](https://github.com/can1357/oh-my-pi) (omp).
   Described below.
 - **agent-switchboard** puts Claude Code sessions on Agent Switchboard, a local board for working
   across many agent sessions at once. See [plugins/agent-switchboard/README.md](plugins/agent-switchboard/README.md).
@@ -24,8 +25,13 @@ Works on Linux and Windows. Nothing reads omp's own `~/.omp` files; omp is not r
 
 ```sh
 claude plugin marketplace add dgsantana/claude-mods
-claude plugin install omp-port@dgsantana
+claude plugin install agent-cockpit@dgsantana
 ```
+
+Coming from omp-port (renamed in 0.5.0): `claude plugin marketplace update dgsantana`, then
+`claude plugin uninstall omp-port@dgsantana` and install `agent-cockpit@dgsantana`. Config,
+rules and themes under `.agents/` carry over. The advisor's settings and spend were kept in
+omp-port's own store and start empty: set them again with `/dgs advisor`.
 
 The status line comes with the plugin; nothing to install. It is a band above the prompt
 (Claude Code's own `statusLine` slot below the prompt is not reachable from a mod), drawn on the
@@ -43,7 +49,7 @@ those rules are skipped and you get one toast per session saying so.
 
 Everything is read from `.agents/` folders, lowest to highest:
 
-1. built-in rules shipped with the plugin (`plugins/omp-port/builtin-rules/`, vendored from omp)
+1. built-in rules shipped with the plugin (`plugins/agent-cockpit/builtin-rules/`, vendored from omp)
 2. global: `~/.agents/` (`%USERPROFILE%\.agents\` on Windows)
 3. project: every `.agents/` from the repository root down to the working directory; the nearest wins
 
@@ -136,7 +142,7 @@ Segments:
 | `fiveHour`, `sevenDay` | The share left of the 5-hour and weekly usage windows, with the time to reset |
 | `ctx` | Context use as a percent (the gauge shows it too) |
 | `delta` | What the last turn cost and how much it grew or shrank the context |
-| `activity` | omp-port's own work this session: TTSR rules fired, advisor spend (`!` while a note waits) |
+| `activity` | agent-cockpit's own work this session: TTSR rules fired, advisor spend (`!` while a note waits) |
 | `duration` | Time since the session began (a resumed session counts from its first launch) |
 
 When the row is too narrow, segments drop from the lowest priority up: `activity` and `caveman`
@@ -178,7 +184,7 @@ and judged `question` rules are not supported (Claude Code exposes no stream to 
 
 ## Advisor
 
-Claude Code has its own built-in `/advisor`; omp-port's advisor lives under `/dgs advisor`.
+Claude Code has its own built-in `/advisor`; agent-cockpit's advisor lives under `/dgs advisor`.
 
 ```
 /dgs advisor on | off | status | reset
@@ -197,18 +203,18 @@ shows as a toast and a band above the prompt with **Send with next prompt** (def
 ## Development
 
 ```sh
-bun test plugins/omp-port/unit              # pure logic
-claude plugin test plugins/omp-port         # hooks against the engine
-claude plugin validate . && claude plugin validate plugins/omp-port
-claude --plugin-dir plugins/omp-port        # try it in a session
+bun test plugins/agent-cockpit/unit              # pure logic
+claude plugin test plugins/agent-cockpit         # hooks against the engine
+claude plugin validate . && claude plugin validate plugins/agent-cockpit
+claude --plugin-dir plugins/agent-cockpit        # try it in a session
 ```
 
 The same commands with `plugins/agent-switchboard` cover the second plugin; `bun run test:unit`,
 `bun run test:plugin` and `bun run validate` run both.
 
-All engine calls (`$`) live in `plugins/omp-port/hooks/register.tsx`: the engine only follows
+All engine calls (`$`) live in `plugins/agent-cockpit/hooks/register.tsx`: the engine only follows
 `$` into functions declared in the hooks module itself. Everything else is pure and imported.
 
 ## Licence
 
-MIT. `plugins/omp-port/builtin-rules/` comes from oh-my-pi (MIT); see [NOTICE](NOTICE).
+MIT. `plugins/agent-cockpit/builtin-rules/` comes from oh-my-pi (MIT); see [NOTICE](NOTICE).

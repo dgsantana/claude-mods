@@ -1,4 +1,4 @@
-// The catalogue of every omp-port setting. It drives the config defaults,
+// The catalogue of every agent-cockpit setting. It drives the config defaults,
 // validation, the /dgs pane's rows and the README's settings table.
 
 import type { Config } from './layers'

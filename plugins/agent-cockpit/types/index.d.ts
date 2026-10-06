@@ -20,7 +20,7 @@ export type GitInfo = {
 export type RateWindow = { percentUsed: number; resetsAt?: number }
 // Cost and context change over the last main-thread turn.
 export type TurnDelta = { usd: number; tokens: number }
-// What omp-port itself did this session: TTSR rules fired, advisor spend.
+// What agent-cockpit itself did this session: TTSR rules fired, advisor spend.
 export type Activity = { ttsrHits: number; advisor?: { usd: number; note: boolean } }
 export type Caveman = { mode: string; savings?: string }
 export type StatusData = {
@@ -43,7 +43,7 @@ export type StatusData = {
 
 declare module 'claude-code' {
   interface PluginState {
-    'omp-port': {
+    'agent-cockpit': {
       ttsrRepeat: RepeatSnapshot
       astGrepHinted: boolean
       advisorEdits: string[]

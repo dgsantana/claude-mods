@@ -1,10 +1,10 @@
 #!/usr/bin/env bun
 // Prints (or with --write, puts into README.md) the settings table generated
-// from the omp-port settings catalogue.
+// from the agent-cockpit settings catalogue.
 
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { SETTINGS, TABS } from '../plugins/omp-port/hooks/settings-schema'
+import { SETTINGS, TABS } from '../plugins/agent-cockpit/hooks/settings-schema'
 
 const show = (v: unknown) => (v === undefined || v === '' ? 'none' : `\`${JSON.stringify(v)}\``)
 

@@ -23,10 +23,10 @@ test('append and rules sections land after the engine sections, session scope', 
 
   const { sections } = await $.prompt.compose(INPUT)
   expect(sections[0]).toEqual(BASE)
-  const append = sections.find(s => s.id === 'omp-port:append')
-  expect(append).toEqual({ id: 'omp-port:append', text: 'Global append.\n\nProject append.', scope: 'session' })
+  const append = sections.find(s => s.id === 'agent-cockpit:append')
+  expect(append).toEqual({ id: 'agent-cockpit:append', text: 'Global append.\n\nProject append.', scope: 'session' })
 
-  const rules = sections.find(s => s.id === 'omp-port:rules')
+  const rules = sections.find(s => s.id === 'agent-cockpit:rules')
   expect(rules?.scope).toBe('session')
   expect(rules?.text).toContain('Always do X.')
   expect(rules?.text).toContain('- book (*.sql): Read for DB work → /home/u/.agents/rules/book.md')
@@ -51,7 +51,7 @@ test('append disabled by project config', async ($, on) => {
   })
   on('prompt.compose', () => ({ sections: [BASE] }))
   const { sections } = await $.prompt.compose(INPUT)
-  expect(sections.some(s => s.id === 'omp-port:append')).toBe(false)
+  expect(sections.some(s => s.id === 'agent-cockpit:append')).toBe(false)
 })
 
 test('a broken world falls through to the engine sections', async ($, on) => {

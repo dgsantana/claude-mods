@@ -8,15 +8,15 @@ plugin marketplace (`github.com/dgsantana/claude-mods`). See README.md for what 
 | Path | What |
 |---|---|
 | `.claude-plugin/marketplace.json` | Marketplace manifest; one entry per plugin under `plugins/` |
-| `plugins/omp-port/` | The omp-port plugin (function-hook mod) |
-| `plugins/omp-port/hooks/register.tsx` | The one hooks module; every `$` call lives here |
-| `plugins/omp-port/hooks/*.ts` | Pure logic: frontmatter, paths, glob, layers, load, rule, rules, ttsr-match, advisor, agentsmd, settings-schema, statusline-config, status, config-patch, themes, pane-model |
-| `plugins/omp-port/hooks/settings-schema.ts` | The settings catalogue: defaults, validation, `/dgs` pane rows and the README table all come from it |
-| `plugins/omp-port/themes/builtin.json` | 102 status-line palettes generated from oh-my-pi by `scripts/vendor-themes.ts`. Don't edit; regenerate |
-| `plugins/omp-port/types/index.d.ts` | `$.state` contract (`PluginState['omp-port']`) |
-| `plugins/omp-port/builtin-rules/` | Rules vendored from oh-my-pi (MIT, see NOTICE). Don't edit; re-vendor |
-| `plugins/omp-port/unit/*.spec.ts` | Unit tests for pure modules (`bun test`) |
-| `plugins/omp-port/tests/*.test.ts` | Engine tests (`claude plugin test`); `tests/world.ts` fakes fs/session/env |
+| `plugins/agent-cockpit/` | The agent-cockpit plugin (function-hook mod) |
+| `plugins/agent-cockpit/hooks/register.tsx` | The one hooks module; every `$` call lives here |
+| `plugins/agent-cockpit/hooks/*.ts` | Pure logic: frontmatter, paths, glob, layers, load, rule, rules, ttsr-match, advisor, agentsmd, settings-schema, statusline-config, status, config-patch, themes, pane-model |
+| `plugins/agent-cockpit/hooks/settings-schema.ts` | The settings catalogue: defaults, validation, `/dgs` pane rows and the README table all come from it |
+| `plugins/agent-cockpit/themes/builtin.json` | 102 status-line palettes generated from oh-my-pi by `scripts/vendor-themes.ts`. Don't edit; regenerate |
+| `plugins/agent-cockpit/types/index.d.ts` | `$.state` contract (`PluginState['agent-cockpit']`) |
+| `plugins/agent-cockpit/builtin-rules/` | Rules vendored from oh-my-pi (MIT, see NOTICE). Don't edit; re-vendor |
+| `plugins/agent-cockpit/unit/*.spec.ts` | Unit tests for pure modules (`bun test`) |
+| `plugins/agent-cockpit/tests/*.test.ts` | Engine tests (`claude plugin test`); `tests/world.ts` fakes fs/session/env |
 | `plugins/agent-switchboard/` | The agent-switchboard plugin: publishes each session's state as an Agent Switchboard snapshot file |
 | `plugins/agent-switchboard/hooks/register.ts` | Its hooks module; every `$` call lives here |
 | `plugins/agent-switchboard/hooks/state.ts`, `snapshot.ts` | Pure logic: the session state machine, and snapshot format v1 with its location |
@@ -27,11 +27,11 @@ plugin marketplace (`github.com/dgsantana/claude-mods`). See README.md for what 
 ## Commands
 
 ```sh
-bun test plugins/omp-port/unit              # pure logic
-claude plugin test plugins/omp-port         # hooks against the engine
-claude plugin validate . && claude plugin validate plugins/omp-port
-cd plugins/omp-port && bunx -p typescript@5.9 tsc -p . --noEmit   # type-check (after the engine has loaded the mod once)
-claude --plugin-dir plugins/omp-port        # try it in a session
+bun test plugins/agent-cockpit/unit              # pure logic
+claude plugin test plugins/agent-cockpit         # hooks against the engine
+claude plugin validate . && claude plugin validate plugins/agent-cockpit
+cd plugins/agent-cockpit && bunx -p typescript@5.9 tsc -p . --noEmit   # type-check (after the engine has loaded the mod once)
+claude --plugin-dir plugins/agent-cockpit        # try it in a session
 ```
 
 The same four with `plugins/agent-switchboard` for that plugin. All must pass before a commit that
@@ -48,7 +48,7 @@ agent-switchboard repository (`docs/reference/snapshot-format.md`); change it th
   env, processes, network and time go through `$.fs`, `$.env.get('<literal>')`,
   `$.process.run`, `$.http.fetch`, `$.clock`. YAML is parsed by our own subset parser
   (`frontmatter.ts`).
-- **`$.env.get` and `$.state` refs take string literals** (`{ plugin: 'omp-port', key: '...' } as const`),
+- **`$.env.get` and `$.state` refs take string literals** (`{ plugin: 'agent-cockpit', key: '...' } as const`),
   and every state key must be declared in `types/index.d.ts`.
 - **One hook per (event, matcher)** in the module. Add behaviour to the existing hook rather
   than registering the same event twice.
@@ -64,10 +64,10 @@ agent-switchboard repository (`docs/reference/snapshot-format.md`); change it th
 - Inline test plugins (`test(name, { plugins }, …)`) can't close over test-file variables.
 - `$.command.register` throws for a name a built-in owns (e.g. `/advisor`), and the test kit does
   not reproduce that. Register each command in its own try/catch, and never hook `command.run`
-  for a built-in's name. omp-port's commands live under `/dgs` (the owner's initials, a name no
+  for a built-in's name. agent-cockpit's commands live under `/dgs` (the owner's initials, a name no
   built-in will claim).
 - `Select` takes 1–64 options. The test kit does not check this (or other paint-time limits):
-  after changing a pane, open it in a real session (`tmux` + `claude --plugin-dir plugins/omp-port
+  after changing a pane, open it in a real session (`tmux` + `claude --plugin-dir plugins/agent-cockpit
   --debug-file <f>`) and grep the log for `does not validate`.
 
 ## Engine test conventions
@@ -108,4 +108,4 @@ agent-switchboard repository (`docs/reference/snapshot-format.md`); change it th
 2. Run the commands above; all green.
 3. Commit (Conventional Commits) and push to `main`.
 4. On each workstation: `claude plugin marketplace update dgsantana` then
-   `claude plugin update omp-port@dgsantana`.
+   `claude plugin update agent-cockpit@dgsantana`.

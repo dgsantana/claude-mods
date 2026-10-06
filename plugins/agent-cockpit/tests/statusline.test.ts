@@ -53,7 +53,7 @@ async function start($: Engine, clock: { settle: () => Promise<void> }) {
 
 const band = ($: Engine) =>
   $.ui.mount({
-    plugin: 'omp-port',
+    plugin: 'agent-cockpit',
     surface: 'terminal',
     component: 'AbovePrompt',
     props: { hasSurvey: false, isWorking: false, maxRows: 5, bodyColumns: 240 } as never,

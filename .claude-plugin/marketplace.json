@@ -5,9 +5,9 @@
   },
   "plugins": [
     {
-      "name": "omp-port",
-      "source": "./plugins/omp-port",
-      "description": "oh-my-pi features for Claude Code: TTSR, layered rules, AGENTS.md, APPEND_SYSTEM, advisor"
+      "name": "agent-cockpit",
+      "source": "./plugins/agent-cockpit",
+      "description": "The instruments around each Claude Code session: themed status line, TTSR and layered rules, AGENTS.md and APPEND_SYSTEM, an edit advisor"
     },
     {
       "name": "agent-switchboard",
