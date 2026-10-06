@@ -11,7 +11,7 @@ import type { EngineInterface, Register } from 'claude-code'
 import { isRecord } from './guards'
 import { type BoardPrompt, callKey, outcomeOf, ownArgs, promptOf } from './prompt'
 import { promptDelayMsOf, promptingAllowedOf } from './settings'
-import { agentDirOf, boardHomeOf, settingsPathOf, snapshotPathOf, toSnapshot } from './snapshot'
+import { agentDirOf, boardHomeOf, saidPathOf, saidTextOf, settingsPathOf, snapshotPathOf, toSnapshot } from './snapshot'
 import { next as advance, permissionQuestion, type SessionEvent, type SessionState, startSession, type TaskStatus } from './state'
 
 const HEARTBEAT_MS = 15_000
@@ -118,6 +118,16 @@ async function publish($: EngineInterface, state: SessionState): Promise<void> {
   if (!path) throw new Error(`no place for the snapshot of session ${state.sessionId}`)
   const text = JSON.stringify(toSnapshot(state))
   const write = writes.then(() => $.fs.write(path, text))
+  writes = write.catch(() => {})
+  await write
+}
+
+/** The full last answer, beside the snapshot, for the project page; the snapshot keeps only its end. */
+async function publishSaid($: EngineInterface, sessionId: string, text: string): Promise<void> {
+  const home = await boardHome($)
+  const path = home && saidPathOf(home, sessionId)
+  if (!path) return
+  const write = writes.then(() => $.fs.write(path, saidTextOf(text)))
   writes = write.catch(() => {})
   await write
 }
@@ -295,6 +305,7 @@ export const register: Register = on => {
       const when = await $.clock.now()
       if (usage.cost?.usd !== undefined) await apply($, { type: 'cost_seen', usd: usage.cost.usd, at: when })
       await apply($, { type: 'turn_ended', said: e.answer, at: when })
+      if (session && e.answer.trim() !== '') await publishSaid($, session.sessionId, e.answer.trim()).catch(error => report($, error))
       $.clock.after(0, () => {
         pickUpPrompts($).catch(() => {})
       })

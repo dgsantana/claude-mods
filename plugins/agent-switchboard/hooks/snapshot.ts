@@ -83,6 +83,19 @@ export function agentDirOf(env: Env): string {
 /** A session id becomes a file name, so it must not be able to name anything else. */
 const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
 
+/** The full last answer beside the snapshot is capped here, its end kept: the conclusion is there. */
+export const MAX_SAID_CHARS = 64 * 1024
+
+/** Where the full last answer goes, for the project page: `said/<sessionId>.md` in the board folder. */
+export function saidPathOf(boardHome: string, sessionId: string): string | undefined {
+  if (!SAFE_ID.test(sessionId) || sessionId.includes('..')) return undefined
+  return join(boardHome, 'said', `${sessionId}.md`)
+}
+
+export function saidTextOf(text: string): string {
+  return text.length <= MAX_SAID_CHARS ? text : `…${text.slice(text.length - MAX_SAID_CHARS + 1)}`
+}
+
 /** The board's settings file, which the hub owns; this mod only reads it. */
 export function settingsPathOf(boardHome: string): string {
   return join(boardHome, 'settings.json')

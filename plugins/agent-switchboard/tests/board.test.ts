@@ -246,3 +246,11 @@ test('the snapshot says when the session started, as Claude Code counts it', asy
   expect(w.snapshot().startedAt).toBe('2026-10-06T08:00:00.000Z')
 })
 
+
+test("the main loop's full answer goes beside the snapshot, for the project page", async ($, on) => {
+  const w = world(on)
+  await $.session.start(START)
+  await $.turn.start({ text: 'go', turnId: 't' } as never)
+  await $.turn.complete({ ...DONE, answer: '**Done.**\n\n- one\n- two' })
+  expect(w.fake.files.get('/home/u/.agent-switchboard/said/sess-1.md')).toBe('**Done.**\n\n- one\n- two')
+})

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { agentDirOf, boardHomeOf, snapshotPathOf, toSnapshot } from '../hooks/snapshot'
+import { agentDirOf, boardHomeOf, MAX_SAID_CHARS, saidPathOf, saidTextOf, snapshotPathOf, toSnapshot } from '../hooks/snapshot'
 import { next, startSession } from '../hooks/state'
 
 const T0 = Date.UTC(2026, 9, 6, 10, 0, 0)
@@ -99,5 +99,21 @@ describe('when the session started, in the snapshot', () => {
 
   test('absent when not known', () => {
     expect(toSnapshot(start()).startedAt).toBeUndefined()
+  })
+})
+
+describe('the full last answer, beside the snapshot', () => {
+  test('goes to said/<session>.md in the board folder, only for an id that can name nothing else', () => {
+    expect(saidPathOf('/home/u/.agent-switchboard', 'abc-1')).toBe('/home/u/.agent-switchboard/said/abc-1.md')
+    expect(saidPathOf('C:\\b', 'abc')).toBe('C:\\b\\said\\abc.md')
+    expect(saidPathOf('/b', '../x')).toBeUndefined()
+  })
+
+  test('keeps the whole answer up to 64 KB, else its end, marked', () => {
+    expect(saidTextOf('short')).toBe('short')
+    const long = saidTextOf(`${'a'.repeat(MAX_SAID_CHARS)}THE END`)
+    expect(long).toHaveLength(MAX_SAID_CHARS)
+    expect(long.startsWith('…')).toBe(true)
+    expect(long.endsWith('THE END')).toBe(true)
   })
 })
