@@ -42,6 +42,19 @@ describe('a session', () => {
     expect(s.waiting).toEqual([])
   })
 
+  test('a prompt known only some time after it opened waits since it opened', () => {
+    const s = next(fresh(), { type: 'permission_asked', toolUseId: 'b', question: 'Allow Bash?', since: T0 + 1, at: T0 + 15_001 })
+    expect(s.waiting[0]?.since).toBe(T0 + 1)
+    expect(s.heartbeatAt).toBe(T0 + 15_001)
+  })
+
+  test('a permission decided while its call still runs stops waiting; other waits stay', () => {
+    let s = next(fresh(), { type: 'permission_asked', toolUseId: 'b', question: 'Allow Bash?', at: T0 + 1 })
+    s = next(s, { type: 'ask_opened', toolUseId: 'q', questions: ['Which?'], at: T0 + 2 })
+    s = next(s, { type: 'permission_decided', toolUseId: 'b', at: T0 + 3 })
+    expect(s.waiting.map(w => w.toolUseId)).toEqual(['q'])
+  })
+
   test('a permission check on a call already asking the human keeps the question', () => {
     let s = next(fresh(), { type: 'ask_opened', toolUseId: 'q', questions: ['Which one?'], at: T0 + 1 })
     s = next(s, { type: 'permission_asked', toolUseId: 'q', question: 'Allow AskUserQuestion?', at: T0 + 2 })

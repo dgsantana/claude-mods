@@ -69,15 +69,15 @@ test('an AskUserQuestion shows as waiting with its question until it is answered
   expect(w.snapshot().openAsk).toBeUndefined()
 })
 
-// Holds a Bash call open, as the engine does while the permission decision is pending.
-async function openCall($: Engine, on: On, w: ReturnType<typeof world>) {
+// Holds a Bash call open after its permission check answered `ask`, as the engine does while the
+// mode's decider (a prompt, or auto mode's classifier) has not decided.
+async function openCall($: Engine, on: On, w: ReturnType<typeof world>, agentId?: string) {
   let release = () => {}
   // The engine's lib is es2023, which has no Promise.withResolvers.
   const gate = new Promise<void>(resolve => {
     release = resolve
   })
   on('tool.check', () => ({ decision: 'ask' }))
-  on('classic.PermissionRequest', () => ({}))
   on('tool.call', async () => {
     await gate
     return { deny: 'The user denied it' }
@@ -86,33 +86,63 @@ async function openCall($: Engine, on: On, w: ReturnType<typeof world>) {
   await $.turn.start({ text: 'go', turnId: 't' } as never)
   const call = $.tool.call({ tool: 'Bash', tool_use_id: 'b1', command: 'git push' } as never)
   await w.clock.settle()
-  await $.tool.check({ tool: 'Bash', input: { command: 'git push' }, tool_use_id: 'b1' } as never)
+  await $.tool.check({ tool: 'Bash', input: { command: 'git push' }, tool_use_id: 'b1', ...(agentId ? { agentId } : {}) } as never)
   return async () => {
     release()
     await call
   }
 }
 
-test('a permission prompt on screen shows as waiting until the call resolves', async ($, on) => {
+test('a call still undecided 15 seconds after its check answered ask is a prompt waiting on the human', async ($, on) => {
   const w = world(on)
   const finish = await openCall($, on, w)
-  await $.classic.PermissionRequest({ tool_name: 'Bash', tool_input: { command: 'git push' } })
+  await w.clock.advance(14_900)
+  expect(w.snapshot().state).toBe('running')
+  await w.clock.advance(200)
   expect(w.snapshot()).toMatchObject({ state: 'waiting', openAsk: { question: 'Allow Bash: git push?', count: 1 } })
   await finish()
   expect(w.snapshot().state).toBe('running')
 })
 
-test('a check that answers ask without a prompt, as auto mode does, is not waiting on the human', async ($, on) => {
+test('a call decided within 15 seconds, as auto mode decides, never shows as waiting', async ($, on) => {
   const w = world(on)
   const finish = await openCall($, on, w)
+  await w.clock.advance(11_000)
+  await finish()
+  await w.clock.advance(10_000)
+  expect(w.snapshot().state).toBe('running')
+})
+
+// The "run in background" pill is drawn only while an allowed Bash command runs.
+const PILL = { plugin: 'agent-switchboard', surface: 'terminal', component: 'ToolProgress', props: { tool_use_id: 'b1', kind: 'background_hint', hint: '(ctrl+b to run in background)' } } as never
+
+test('a long command that starts running after approval stops waiting, though it has not finished', async ($, on) => {
+  const w = world(on)
+  on('ui.render', () => h('Text', null, 'pill') as never)
+  const finish = await openCall($, on, w)
+  await w.clock.advance(20_000)
+  expect(w.snapshot().state).toBe('waiting')
+  await $.ui.mount(PILL)
+  await w.clock.settle()
   expect(w.snapshot().state).toBe('running')
   await finish()
 })
 
-test("a subagent's permission prompt is not the main session's", async ($, on) => {
+test('a command already running when the 15 seconds pass never shows as waiting', async ($, on) => {
   const w = world(on)
+  on('ui.render', () => h('Text', null, 'pill') as never)
   const finish = await openCall($, on, w)
-  await $.classic.PermissionRequest({ tool_name: 'Bash', tool_input: { command: 'git push' }, agent_id: 'sub' })
+  await w.clock.advance(3_000)
+  await $.ui.mount(PILL)
+  await w.clock.advance(60_000)
+  expect(w.snapshot().state).toBe('running')
+  await finish()
+})
+
+test("a subagent's undecided call is not the main session's wait", async ($, on) => {
+  const w = world(on)
+  const finish = await openCall($, on, w, 'sub')
+  await w.clock.advance(10_000)
   expect(w.snapshot().state).toBe('running')
   await finish()
 })

@@ -45,6 +45,7 @@ export type SessionEvent =
   | { type: 'turn_ended'; at: number }
   | { type: 'ask_opened'; toolUseId: string; questions: string[]; at: number }
   | { type: 'permission_asked'; toolUseId: string; question: string; at: number }
+  | { type: 'permission_decided'; toolUseId: string; at: number }
   | { type: 'tool_finished'; toolUseId: string; at: number }
   | { type: 'task_created'; id: string; subject: string; at: number }
   | { type: 'task_updated'; id: string; status?: TaskStatus | 'deleted'; subject?: string; at: number }
@@ -103,6 +104,7 @@ export function next(state: SessionState, event: SessionEvent): SessionState {
       // AskUserQuestion is itself put to the permission check; its question says more.
       if (state.waiting.some(w => w.toolUseId === event.toolUseId)) return active
       return { ...active, waiting: [...state.waiting, { toolUseId: event.toolUseId, question: event.question, count: 1, since: event.at }] }
+    case 'permission_decided':
     case 'tool_finished':
       return { ...active, waiting: state.waiting.filter(w => w.toolUseId !== event.toolUseId) }
     case 'task_created':

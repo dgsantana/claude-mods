@@ -22,7 +22,7 @@ restart. `SWITCHBOARD_HOME` moves the board's data folder, as it does for the hu
 
 | Field | From |
 |---|---|
-| `state` | `running` from `turn.start` to the main loop's `turn.complete`; `waiting` while an `AskUserQuestion` call is open, or while a permission prompt is on screen (the `PermissionRequest` hook for a call whose check answered `ask`), until that call resolves; `idle` otherwise. A check answering `ask` alone is not a wait: in auto mode it goes to the classifier, not to the human |
+| `state` | `running` from `turn.start` to the main loop's `turn.complete`; `waiting` while an `AskUserQuestion` call is open, or while a call whose permission check answered `ask` is still undecided after 15 seconds, until it is decided (the "run in background" line appears under a running Bash command) or resolves; `idle` otherwise. No hook tells a prompt on screen from auto mode's classifier, which took up to 10.6 s when measured, so a prompt reaches the board 15 s late rather than the classifier showing as a wait |
 | `openAsk` | The oldest open wait: an AskUserQuestion's first question and question count, or `Allow <tool>: <what>?` for a permission prompt |
 | `todo` | The task tools (`TaskCreate`, `TaskUpdate`) or a `TodoWrite` list |
 | `cost` | `$.session.usage().cost.usd`, after each turn and on each heartbeat |

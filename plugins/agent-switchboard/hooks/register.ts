@@ -13,6 +13,13 @@ import { next as advance, permissionQuestion, type SessionEvent, type SessionSta
 
 const HEARTBEAT_MS = 15_000
 const FAILURE_LOG_MS = 60_000
+/**
+ * How long a call whose permission check answered `ask` stays undecided before it counts as a prompt
+ * on screen. `ask` hands the call to the mode's decider: a prompt, or in auto mode a classifier, which
+ * took from 1 to 10.6 seconds when measured (2026-10-06). No hook or call tells the two apart, so a
+ * prompt reaches the board this late; the author chose that over false waits.
+ */
+const PROMPT_AFTER_MS = 15_000
 
 // Module variables reset on a hot reload; the next event or heartbeat starts watching again.
 let session: SessionState | undefined
@@ -20,12 +27,8 @@ let starting: Promise<SessionState | undefined> | undefined
 let heartbeat: { cancel: () => void } | undefined
 let writes: Promise<void> = Promise.resolve()
 let lastFailureLogAt = Number.NEGATIVE_INFINITY
-/**
- * Main-loop calls whose permission check answered `ask`, by tool_use_id, until they resolve. `ask` puts
- * a call to the mode's decider, which in auto mode is a classifier, not a prompt; only the
- * PermissionRequest hook, raised when a prompt is shown, makes one a wait on the human.
- */
-const asked = new Map<string, { tool: string; input: string }>()
+/** Main-loop calls whose permission check answered `ask` and that have not resolved, by tool_use_id. */
+const undecided = new Set<string>()
 
 /** Reported at most once a minute, to the debug log only: never into the conversation. */
 async function report($: EngineInterface, error: unknown): Promise<void> {
@@ -174,7 +177,7 @@ export const register: Register = on => {
     const id = e.tool_use_id
     if (e.agentId !== undefined || id === undefined) return next(e)
     if (e.tool === 'AskUserQuestion') await apply($, { type: 'ask_opened', toolUseId: id, questions: questionsOf(e), at: await $.clock.now() })
-    const result = await next(e).finally(() => asked.delete(id))
+    const result = await next(e).finally(() => undecided.delete(id))
     if (!('deny' in result)) await trackTasks($, e.tool, e, result.result)
     await apply($, { type: 'tool_finished', toolUseId: id, at: await $.clock.now() })
     return result
@@ -182,22 +185,32 @@ export const register: Register = on => {
 
   on('tool.check', async ($, e, next) => {
     const verdict = await next(e)
-    if (verdict.decision === 'ask' && e.agentId === undefined && e.tool_use_id !== undefined) {
-      asked.set(e.tool_use_id, { tool: e.tool, input: JSON.stringify(e.input) })
+    const id = e.tool_use_id
+    if (verdict.decision === 'ask' && e.agentId === undefined && id !== undefined) {
+      undecided.add(id)
+      const question = permissionQuestion(e.tool, e.input)
+      $.clock.after(PROMPT_AFTER_MS, () => {
+        if (!undecided.has(id)) return
+        $.clock
+          .now()
+          .then(at => apply($, { type: 'permission_asked', toolUseId: id, question, at }))
+          .catch(error => report($, error))
+      })
     }
     return verdict
   }).catch(($, e, next) => next(e))
 
-  // The prompt carries no tool_use_id: it belongs to the asked call with the same tool and input, or
-  // failing that the latest asked call of that tool.
-  on('classic.PermissionRequest', async ($, e, next) => {
-    if (e.agent_id === undefined) {
-      const input = JSON.stringify(e.tool_input)
-      const calls = [...asked].filter(([, call]) => call.tool === e.tool_name)
-      const [id] = calls.find(([, call]) => call.input === input) ?? calls.at(-1) ?? []
-      if (id !== undefined) {
-        await apply($, { type: 'permission_asked', toolUseId: id, question: permissionQuestion(e.tool_name, e.tool_input), at: await $.clock.now() })
-      }
+  // The "run in background" pill is drawn about 2 s into an allowed Bash command: the call is decided,
+  // so a long command does not read as waiting until it ends. Drawing is not held up by the write.
+  on('ui.render', { component: 'ToolProgress' }, async ($, e, next) => {
+    const id = e.props.tool_use_id
+    if (undecided.delete(id)) {
+      $.clock.after(0, () => {
+        $.clock
+          .now()
+          .then(at => apply($, { type: 'permission_decided', toolUseId: id, at }))
+          .catch(error => report($, error))
+      })
     }
     return next(e)
   }).catch(($, e, next) => next(e))
