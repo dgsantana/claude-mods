@@ -7,11 +7,13 @@ const byKey = (k: string) => SETTINGS.find(s => s.key === k) as Setting
 describe('catalogue', () => {
   test('spec settings with spec defaults', () => {
     const expected: Record<string, unknown> = {
+      'statusline.enabled': true,
       'statusline.theme': 'dark',
       'statusline.separator': 'powerline-thin',
+      'statusline.fill': 'gauge',
       'statusline.icons': 'nerd',
-      'statusline.left': ['model', 'caveman', 'mode', 'path', 'git', 'pr'],
-      'statusline.right': ['session', 'tokens', 'cost', 'fiveHour', 'ctx'],
+      'statusline.left': ['model', 'caveman', 'path', 'git'],
+      'statusline.right': ['tokens', 'cost', 'fiveHour'],
       'statusline.path.style': 'basename',
       'statusline.git.aheadBehind': true,
       'statusline.fiveHour.showReset': true,

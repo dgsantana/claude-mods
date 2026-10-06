@@ -9,6 +9,7 @@ import { discover, homeDir, type Io, type Snapshot } from './load'
 import { paneRows, parseListInput, previewSegments, projectLayerDir, rulesRows, SELECT_MAX, segmentsEdit, themeGroups } from './pane-model'
 import { isWindowsPath, join } from './paths'
 import { renderRulesSection } from './rules'
+import { parseCaveman, parsePorcelain, type StatusData, statusSpans } from './status'
 import { SEGMENT_IDS, type SegmentId, SETTINGS, type Setting, TABS, type Tab, validate } from './settings-schema'
 import { sanitizeStatusline, type StatuslineConfig } from './statusline-config'
 import { listThemes, resolveTheme } from './themes'
@@ -499,6 +500,93 @@ async function paneExtras(
   return null
 }
 
+// The status line band: refreshStatus gathers what the segments show into
+// $.state, the AbovePrompt hook draws it. Refreshed at session start, after
+// each main-thread turn and on a timer (git changes, caveman mode, the reset
+// countdown).
+const STATUS_DATA = { plugin: 'omp-port', key: 'statusData' } as const
+const STATUS_TICK_MS = 5000
+let refreshing = false
+let stopTick: (() => void) | undefined
+
+// Caveman's flag files in the Claude config dir; a link is refused, as
+// caveman's own status line refuses it.
+async function readCavemanFile($: EngineInterface, path: string): Promise<string | undefined> {
+  try {
+    const st = await $.fs.stat(path)
+    if (st.isLink || st.kind !== 'file') return undefined
+    const text = await $.fs.read(path)
+    return typeof text === 'string' ? text : undefined
+  } catch {
+    return undefined
+  }
+}
+
+async function gatherStatus($: EngineInterface): Promise<StatusData> {
+  const data: StatusData = { now: Math.floor((await $.clock.now()) / 60_000) * 60_000 }
+  const cwd = await $.session.cwd().catch(() => undefined)
+  const home = await homeDir(ioFrom($))
+  data.cwd = cwd
+  data.home = home
+  data.model = await $.session.model().catch(() => undefined)
+  try {
+    const usage = await $.session.usage()
+    data.tokens = usage.context.tokens
+    data.percent = usage.context.percent
+    data.window = usage.context.window
+    data.usd = usage.cost?.usd
+    const five = usage.rateLimits.find(r => r.kind === 'five_hour')
+    if (five) data.fiveHour = { percentUsed: five.percentUsed, resetsAt: five.resetsAt ? Date.parse(five.resetsAt) : undefined }
+  } catch {}
+  try {
+    const r = await $.process.run(['git', 'status', '--porcelain=v2', '--branch'], { cwd, timeoutMs: 1000, env: { GIT_OPTIONAL_LOCKS: '0' } })
+    if (r.exitCode === 0) data.git = parsePorcelain(r.stdout)
+  } catch {}
+  const configDir = (await $.env.get('CLAUDE_CONFIG_DIR')) || (home ? join(home, '.claude') : undefined)
+  if (configDir) {
+    const flag = await readCavemanFile($, join(configDir, '.caveman-active'))
+    const suffix = flag === undefined ? undefined : await readCavemanFile($, join(configDir, '.caveman-statusline-suffix'))
+    data.caveman = parseCaveman(flag, suffix, (await $.env.get('CAVEMAN_STATUSLINE_SAVINGS')) !== '0')
+  }
+  // $.state holds plain JSON: fields without a reading are left out.
+  return JSON.parse(JSON.stringify(data)) as StatusData
+}
+
+async function refreshStatus($: EngineInterface): Promise<void> {
+  if (refreshing) return
+  refreshing = true
+  try {
+    const data = await gatherStatus($)
+    const held = (await $.state.get(STATUS_DATA)).value
+    if (JSON.stringify(held) !== JSON.stringify(data)) await $.state.set(STATUS_DATA, data)
+  } catch (err) {
+    warnOnce($, `status line refresh failed (${errText(err)})`)
+  } finally {
+    refreshing = false
+  }
+}
+
+async function statusRow($: EngineInterface, e: Parameters<EngineInterface['ui']['resolve']>[0], columns: number | undefined) {
+  const data = (await $.state.get(STATUS_DATA)).value
+  if (!data) return null
+  const snap = await snapshot($)
+  const { config, warnings } = sanitizeStatusline(snap.config.statusline)
+  if (!config.enabled) return null
+  const resolved = resolveTheme(config.theme, await builtinThemes($), snap.themeSpecs)
+  for (const w of [...warnings, ...resolved.warnings]) warnOnce($, w)
+  const { left, middle, right } = statusSpans(data, config, resolved.theme, columns)
+  const { Box, Text } = $.ui.resolve(e)
+  return (
+    <Box flexDirection="row" flexWrap="nowrap" overflow="hidden">
+      {[...left, ...middle, ...right].map(s => (
+        <Text color={s.color} backgroundColor={s.backgroundColor} wrap="truncate">
+          {s.text}
+        </Text>
+      ))}
+    </Box>
+  )
+}
+
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     cached = undefined
@@ -512,7 +600,15 @@ export const register: Register = on => {
     } catch (err) {
       warnOnce($, `can't register /omp (${errText(err)})`)
     }
-    return next(e)
+    const started = await next(e)
+    stopTick?.()
+    stopTick = $.clock.every(STATUS_TICK_MS, () => {
+      refreshStatus($).catch(() => {})
+    }).cancel
+    $.clock.after(0, () => {
+      refreshStatus($).catch(() => {})
+    })
+    return started
   })
 
   on('turn.start', async ($, e, next) => {
@@ -674,12 +770,20 @@ export const register: Register = on => {
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    if (e.props.hasSurvey) return next(e)
+    let status = null
+    try {
+      status = await statusRow($, e, e.props.bodyColumns)
+    } catch (err) {
+      warnOnce($, `status line not drawn (${errText(err)})`)
+    }
     const note = (await $.state.get(NOTE)).value
-    if (!note) return next(e)
+    if (!note) return status ?? next(e)
     const decision = (await $.state.get(DECISION)).value ?? 'accept'
     const { Box, Button, Text } = $.ui.resolve(e)
     return (
       <Box flexDirection="column">
+        {status}
         <Text>
           <Text bold color="warning">Advisor: </Text>
           {note}
@@ -739,6 +843,9 @@ export const register: Register = on => {
 
   on('turn.complete', async ($, e, next) => {
     if (e.agentId === undefined) {
+      $.clock.after(0, () => {
+        refreshStatus($).catch(() => {})
+      })
       const held = await $.state.get(REPEAT)
       const state = held.value ?? newRepeatState()
       onTurnEnd(state)

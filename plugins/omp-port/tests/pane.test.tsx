@@ -131,8 +131,8 @@ test('segments editor: up, remove and add write the list', async ($, on) => {
   expect(JSON.parse(w.writes[GLOBAL] ?? '{}').statusline.left).toEqual(['path', 'model', 'git'])
   await pane.press({ key: 'seg-statusline.left-git-remove' })
   expect(JSON.parse(w.writes[GLOBAL] ?? '{}').statusline.left).toEqual(['path', 'model'])
-  await pane.select({ key: 'seg-statusline.left-add', value: 'pr' })
-  expect(JSON.parse(w.writes[GLOBAL] ?? '{}').statusline.left).toEqual(['path', 'model', 'pr'])
+  await pane.select({ key: 'seg-statusline.left-add', value: 'caveman' })
+  expect(JSON.parse(w.writes[GLOBAL] ?? '{}').statusline.left).toEqual(['path', 'model', 'caveman'])
 })
 
 test('preview follows the layout and recolours with the theme', async ($, on) => {

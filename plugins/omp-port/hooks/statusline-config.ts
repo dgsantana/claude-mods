@@ -1,12 +1,14 @@
-// The `statusline` section of config.json, sanitised so the status line
+// The `statusline` section of config.json, sanitised so the status line band
 // always has a usable layout whatever the files say.
 
 import { getPath } from './config-patch'
-import { ICON_SETS, PATH_STYLES, SEGMENT_IDS, SEPARATORS, type SegmentId, settingsFor, validate } from './settings-schema'
+import { FILLS, ICON_SETS, PATH_STYLES, RETIRED_SEGMENTS, SEGMENT_IDS, SEPARATORS, type SegmentId, settingsFor, validate } from './settings-schema'
 
 export type StatuslineConfig = {
+  enabled: boolean
   theme: string
   separator: (typeof SEPARATORS)[number]
+  fill: (typeof FILLS)[number]
   icons: (typeof ICON_SETS)[number]
   left: SegmentId[]
   right: SegmentId[]
@@ -32,6 +34,7 @@ export function sanitizeStatusline(raw: unknown): { config: StatuslineConfig; wa
       const known: readonly unknown[] = SEGMENT_IDS
       const kept: SegmentId[] = []
       for (const id of value) {
+        if (RETIRED_SEGMENTS.includes(id as string)) continue
         if (!known.includes(id)) warnings.push(`${s.key}: unknown segment ${String(id)} dropped`)
         else if (kept.includes(id as SegmentId)) warnings.push(`${s.key}: duplicate segment ${String(id)} dropped`)
         else if (!taken.has(id as string)) kept.push(id as SegmentId)

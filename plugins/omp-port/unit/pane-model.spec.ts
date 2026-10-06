@@ -65,7 +65,7 @@ describe('segmentsEdit', () => {
     expect(segmentsEdit([...L], { down: 'path' })).toEqual(['model', 'git', 'path'])
     expect(segmentsEdit([...L], { down: 'git' })).toEqual(['model', 'path', 'git'])
     expect(segmentsEdit([...L], { remove: 'path' })).toEqual(['model', 'git'])
-    expect(segmentsEdit([...L], { add: 'pr' })).toEqual(['model', 'path', 'git', 'pr'])
+    expect(segmentsEdit([...L], { add: 'ctx' })).toEqual(['model', 'path', 'git', 'ctx'])
     expect(segmentsEdit([...L], { add: 'git' })).toEqual(['model', 'path', 'git'])
   })
 })

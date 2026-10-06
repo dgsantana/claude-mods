@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test:unit": "bun test plugins/omp-port/unit statusline",
+    "test:unit": "bun test plugins/omp-port/unit",
     "test:plugin": "claude plugin test plugins/omp-port",
     "validate": "claude plugin validate . && claude plugin validate plugins/omp-port"
   }

@@ -10,14 +10,13 @@ plugin marketplace (`github.com/dgsantana/claude-mods`). See README.md for what 
 | `.claude-plugin/marketplace.json` | Marketplace manifest; one entry per plugin under `plugins/` |
 | `plugins/omp-port/` | The omp-port plugin (function-hook mod) |
 | `plugins/omp-port/hooks/register.tsx` | The one hooks module; every `$` call lives here |
-| `plugins/omp-port/hooks/*.ts` | Pure logic: frontmatter, paths, glob, layers, load, rule, rules, ttsr-match, advisor, agentsmd, settings-schema, statusline-config, config-patch, themes, pane-model |
+| `plugins/omp-port/hooks/*.ts` | Pure logic: frontmatter, paths, glob, layers, load, rule, rules, ttsr-match, advisor, agentsmd, settings-schema, statusline-config, status, config-patch, themes, pane-model |
 | `plugins/omp-port/hooks/settings-schema.ts` | The settings catalogue: defaults, validation, `/omp` pane rows and the README table all come from it |
 | `plugins/omp-port/themes/builtin.json` | 102 status-line palettes generated from oh-my-pi by `scripts/vendor-themes.ts`. Don't edit; regenerate |
 | `plugins/omp-port/types/index.d.ts` | `$.state` contract (`PluginState['omp-port']`) |
 | `plugins/omp-port/builtin-rules/` | Rules vendored from oh-my-pi (MIT, see NOTICE). Don't edit; re-vendor |
 | `plugins/omp-port/unit/*.spec.ts` | Unit tests for pure modules (`bun test`) |
 | `plugins/omp-port/tests/*.test.ts` | Engine tests (`claude plugin test`); `tests/world.ts` fakes fs/session/env |
-| `statusline/` | Standalone Bun status line script, its installer and specs |
 | `scripts/` | `vendor-themes.ts` (regenerate themes from an omp checkout), `settings-table.ts --write` (README table) |
 | `examples/.agents/` | Sample layered config, APPEND_SYSTEM, rules and a custom theme |
 | `docs/superpowers/` | Specs and implementation plans |
@@ -25,14 +24,14 @@ plugin marketplace (`github.com/dgsantana/claude-mods`). See README.md for what 
 ## Commands
 
 ```sh
-bun test plugins/omp-port/unit statusline   # pure logic + status line
+bun test plugins/omp-port/unit              # pure logic
 claude plugin test plugins/omp-port         # hooks against the engine
 claude plugin validate . && claude plugin validate plugins/omp-port
 cd plugins/omp-port && bunx -p typescript@5.9 tsc -p . --noEmit   # type-check (after the engine has loaded the mod once)
 claude --plugin-dir plugins/omp-port        # try it in a session
 ```
 
-All four must pass before a commit that touches `plugins/` or `statusline/`.
+All four must pass before a commit that touches `plugins/`.
 
 ## Hard constraints (enforced by the engine, not style)
 
@@ -50,8 +49,9 @@ All four must pass before a commit that touches `plugins/` or `statusline/`.
   than registering the same event twice.
 - **JSX compiles against the global `h`**; elements come from `$.ui.resolve(e)`, never globals.
   State a drawing reads belongs in `$.state`; module variables reset on hot reload.
-- Statusline code is plain Bun and may use `node:*`; it must not import from `register.tsx`, but
-  may import pure modules from `plugins/omp-port/hooks/`.
+- `ui.render` props arrive under `e.props` (`e.props.bodyColumns`, `e.props.hasSurvey`), not on `e`.
+- There is no render site for Claude Code's own `statusLine`; the status line is the
+  `AbovePrompt` band (`status.ts` lays it out, `register.tsx` gathers its data into `$.state`).
 - Hook modules can't import `.json`; the plugin reads `themes/builtin.json` at run time through
   `$.fs` from `$.plugin.root`.
 - Pane ids are 1–64 of `[A-Za-z0-9_-]`. `Text` has no `key` prop; key `Box`/`Button`/`Select`/`Input`.
@@ -73,7 +73,8 @@ All four must pass before a commit that touches `plugins/` or `statusline/`.
 - `$.prompt.context` only carries `instructionFiles` when the input has it.
 - A plugin's `{ deny }` reaches the test's `$.tool.call` as `{ deny }`.
 - Windows paths can't be exercised at engine level on Linux (the engine resolves `C:\…` as
-  relative). Cover Windows in unit specs through the `Io` interface in `load.ts`.
+  relative). Cover Windows in unit specs through the `Io` interface in `load.ts`. On Windows the
+  engine resolves `/home/u` as `D:/home/u`; `tests/world.ts` drops the drive when matching.
 - Use `mock.env`, `mock.store`, `mock.clock` from `claude-code/testing`; `clock.settle()` runs
   work scheduled with `$.clock.after`.
 

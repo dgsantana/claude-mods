@@ -65,13 +65,12 @@ export function rulesRows(rules: readonly Rule[], cfg: Config['rules']): RuleRow
 }
 
 const SAMPLE: Record<SegmentId, string> = {
-  model: 'Opus', caveman: 'ULTRA', mode: 'NORMAL', path: 'project', git: 'main*', pr: '#42',
-  session: 'session', tokens: '12.8k', cost: '$0.42', fiveHour: '77% left', ctx: '31%',
+  model: 'Opus', caveman: 'ULTRA', path: 'project', git: 'main*', tokens: '12.8k', cost: '$0.42', fiveHour: '77% left', ctx: '31%',
 }
 
 export const SEGMENT_TOKEN: Record<SegmentId, ThemeToken> = {
-  model: 'statusLineModel', caveman: 'statusLineCaveman', mode: 'accent', path: 'statusLinePath', git: 'statusLineGitDirty',
-  pr: 'accent', session: 'dim', tokens: 'statusLineOutput', cost: 'statusLineCost', fiveHour: 'success', ctx: 'statusLineContext',
+  model: 'statusLineModel', caveman: 'statusLineCaveman', path: 'statusLinePath', git: 'statusLineGitDirty',
+  tokens: 'statusLineOutput', cost: 'statusLineCost', fiveHour: 'success', ctx: 'statusLineContext',
 }
 
 export type PreviewSegment = { id: SegmentId; text: string; colour: string }

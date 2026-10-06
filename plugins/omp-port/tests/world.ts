@@ -19,7 +19,9 @@ export type World = {
 
 export type Captured = { toasts: string[]; logs: string[]; writes: Record<string, string>; opened: string[]; files: Map<string, string> }
 
-const norm = (p: string) => p.replace(/\\/g, '/').replace(/\/+$/, '')
+// On Windows the engine resolves `/home/u` as `D:/home/u`; the drive is dropped
+// so the same fixtures serve both platforms.
+const norm = (p: string) => p.replace(/\\/g, '/').replace(/^[A-Za-z]:(?=\/)/, '').replace(/\/+$/, '')
 
 export function world(on: On, w: World): Captured {
   const files = new Map(Object.entries(w.files ?? {}).map(([k, v]) => [norm(k), v]))
@@ -42,6 +44,11 @@ export function world(on: On, w: World): Captured {
     if (w.unreadable?.some(p => norm(p) === norm(e.path))) return { deny: `EACCES ${e.path}` }
     const text = files.get(norm(e.path)) ?? (isThemes(e.path) ? themes : undefined)
     return text === undefined ? { deny: `ENOENT ${e.path}` } : { value: text }
+  })
+  on('fs.stat', ($, e) => {
+    if (files.has(norm(e.path))) return { value: { kind: 'file', size: files.get(norm(e.path))?.length ?? 0, mtimeMs: 0, isLink: false } }
+    if (isDir(e.path)) return { value: { kind: 'dir', size: 0, mtimeMs: 0, isLink: false } }
+    return { deny: `ENOENT ${e.path}` }
   })
   on('fs.list', ($, e) => {
     if (w.broken) gone()

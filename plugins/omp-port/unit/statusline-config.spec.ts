@@ -27,6 +27,16 @@ describe('sanitizeStatusline', () => {
     expect(r.config.left).toEqual(['model', 'git'])
     expect(r.warnings.length).toBe(2)
   })
+  test('segments the band no longer has (mode, session, pr) are dropped without a warning', () => {
+    const r = sanitizeStatusline({ left: ['model', 'mode', 'pr'], right: ['session', 'ctx'] })
+    expect(r.config.left).toEqual(['model'])
+    expect(r.config.right).toEqual(['ctx'])
+    expect(r.warnings).toEqual([])
+  })
+  test('enabled defaults to true and can be switched off', () => {
+    expect(sanitizeStatusline(undefined).config.enabled).toBe(true)
+    expect(sanitizeStatusline({ enabled: false }).config.enabled).toBe(false)
+  })
   test('a segment in both lists stays only in left', () => {
     const r = sanitizeStatusline({ left: ['cost'], right: ['cost', 'ctx'] })
     expect(r.config.right).toEqual(['ctx'])

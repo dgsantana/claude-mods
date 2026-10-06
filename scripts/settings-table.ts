@@ -27,7 +27,8 @@ if (import.meta.main) {
   if (!process.argv.includes('--write')) process.stdout.write(table)
   else {
     const file = join(import.meta.dir, '..', 'README.md')
-    const readme = readFileSync(file, 'utf8')
+    // A Windows checkout has CRLF line endings; git restores them on checkout.
+    const readme = readFileSync(file, 'utf8').replace(/\r\n/g, '\n')
     const next = readme.replace(/<!-- settings:start -->\n[\s\S]*?<!-- settings:end -->/, `<!-- settings:start -->\n${table}<!-- settings:end -->`)
     writeFileSync(file, next)
     console.log(next === readme ? 'README.md already up to date' : 'README.md updated')

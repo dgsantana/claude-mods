@@ -2,7 +2,7 @@
 
 Claude Code mods, shared between workstations. Currently one plugin, **omp-port**, which brings
 a handful of [oh-my-pi](https://github.com/can1357/oh-my-pi) (omp) features to Claude Code,
-plus a nerd-font **status line**.
+including omp's nerd-font status line, drawn in the band above the prompt.
 
 | Feature | What it does |
 |---|---|
@@ -11,7 +11,7 @@ plus a nerd-font **status line**.
 | Rules | omp-format rule files: `alwaysApply` rules go into the system prompt, described rules form a rulebook index |
 | TTSR | Time Traveling Stream Rules, tool scope: rules checked against every `Edit`/`Write`; a reminder after the result, or a deny before it |
 | Advisor | Optional reviewer of turns that edited files; you accept or ignore its note; spend tracking and a budget |
-| Status line | omp-style themed line (102 omp themes + custom), configurable segments, separators and icons |
+| Status line | omp-style themed line above the prompt (102 omp themes + custom): configurable segments, separators, icons and a context gauge filling the width |
 | `/omp` | omp-style settings pane for all of the above |
 
 Works on Linux and Windows. Nothing reads omp's own `~/.omp` files; omp is not required.
@@ -23,16 +23,13 @@ claude plugin marketplace add dgsantana/claude-mods
 claude plugin install omp-port@dgsantana
 ```
 
-Status line (needs [Bun](https://bun.sh)): clone the repo, then
+The status line comes with the plugin; nothing to install. It is a band above the prompt
+(Claude Code's own `statusLine` slot below the prompt is not reachable from a mod), drawn on the
+terminal and desktop surfaces. Turn it off with `statusline.enabled: false`.
 
-```sh
-bun statusline/install.ts           # prints the settings.json snippet
-bun statusline/install.ts --write   # writes it into ~/.claude/settings.json (keeps a .bak)
-```
-
-If the [caveman](https://github.com/JuliusBrussee/caveman) plugin is active, the status line shows its
+If the [caveman](https://github.com/JuliusBrussee/caveman) plugin is active, the line shows its
 mode badge and savings (read from `~/.claude/.caveman-active`, same checks as caveman's own script),
-so you can replace caveman's status line with this one without losing it.
+so caveman's own `statusLine` entry can go.
 
 Optional, for AST-based TTSR rules: [ast-grep](https://ast-grep.github.io/) on `PATH`
 (`mise use -g ast-grep`, `scoop install ast-grep`, or `cargo install ast-grep`). Without it
@@ -75,11 +72,13 @@ never overwritten. Everything can also be edited by hand:
 <!-- settings:start -->
 | Key | Tab | Default | Values | Meaning |
 |---|---|---|---|---|
+| `statusline.enabled` | Status line | `true` | bool | Draw the status line in the band above the prompt. |
 | `statusline.theme` | Status line | `"dark"` | theme name | Colour theme: one of the 102 omp themes or a custom one from .agents/mods/themes/. |
 | `statusline.separator` | Status line | `"powerline-thin"` | `powerline` `powerline-thin` `slash` `pipe` `block` `none` `ascii` | How segments are separated; powerline draws filled segments on the theme background. |
+| `statusline.fill` | Status line | `"gauge"` | `gauge` `space` `none` | The room between the sides: a context gauge, blank space pushing the right side to the edge, or nothing. |
 | `statusline.icons` | Status line | `"nerd"` | `nerd` `ascii` `none` | Nerd Font glyphs, short ASCII labels, or no icons. |
-| `statusline.left` | Status line | `["model","caveman","mode","path","git","pr"]` | segment ids | Segments on the left, in order. |
-| `statusline.right` | Status line | `["session","tokens","cost","fiveHour","ctx"]` | segment ids | Segments on the right, in order. |
+| `statusline.left` | Status line | `["model","caveman","path","git"]` | segment ids | Segments on the left, in order. |
+| `statusline.right` | Status line | `["tokens","cost","fiveHour"]` | segment ids | Segments on the right, in order. |
 | `statusline.path.style` | Status line | `"basename"` | `basename` `full` `home` | Folder name only, the full path, or the path relative to home (~). |
 | `statusline.git.aheadBehind` | Status line | `true` | bool | Show ↑/↓ commit counts against the upstream branch. |
 | `statusline.fiveHour.showReset` | Status line | `true` | bool | Show the time until the 5-hour usage window resets. |
@@ -115,12 +114,22 @@ Colours are `#rrggbb`, an xterm index `0`–`255`, or a name from `vars`. Tokens
 `statusLineBg, statusLineSep, statusLineModel, statusLinePath, statusLineGitClean,
 statusLineGitDirty, statusLineContext, statusLineSpend, statusLineOutput, statusLineCost,
 statusLineCaveman, accent, success, warning, error, dim`. Missing tokens come from `extends`
-(or `dark`). Output is truecolor when `COLORTERM` is `truecolor`/`24bit`, otherwise the nearest
-256-colour.
+(or `dark`).
 
-Segments: `model, caveman, mode, path, git, pr, session, tokens, cost, fiveHour, ctx`.
-Separators: `powerline` (filled, on `statusLineBg`), `powerline-thin`, `slash`, `pipe`,
-`block`, `none`, `ascii`. Icons: `nerd`, `ascii`, `none`.
+Segments: `model, caveman, path, git, tokens, cost, fiveHour, ctx`. `tokens` is the input of the
+last response (what fills the context window). Separators: `powerline` (filled, on
+`statusLineBg`), `powerline-thin`, `slash`, `pipe`, `block`, `none`, `ascii`. Icons: `nerd`,
+`ascii`, `none`.
+
+Fill (`statusline.fill`), the room between the left and right segments:
+
+| Value | Draws |
+|---|---|
+| `gauge` | A rule filled to the context share in the ctx colour, the percent at the fill's end, the window size last: `────58%──────── 1M` |
+| `space` | Blank space; the right segments sit at the right edge |
+| `none` | Two spaces; the sides sit together |
+
+The line refreshes at session start, after each turn and every 5 seconds.
 
 ## Rule format
 
@@ -164,7 +173,7 @@ shows as a toast and a band above the prompt with **Send with next prompt** (def
 ## Development
 
 ```sh
-bun test plugins/omp-port/unit statusline   # pure logic
+bun test plugins/omp-port/unit              # pure logic
 claude plugin test plugins/omp-port         # hooks against the engine
 claude plugin validate . && claude plugin validate plugins/omp-port
 claude --plugin-dir plugins/omp-port        # try it in a session

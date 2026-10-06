@@ -1,7 +1,7 @@
 {
   "name": "omp-port",
-  "version": "0.2.2",
-  "description": "oh-my-pi features for Claude Code: TTSR, layered rules, AGENTS.md, APPEND_SYSTEM, advisor",
+  "version": "0.3.0",
+  "description": "oh-my-pi features for Claude Code: TTSR, layered rules, AGENTS.md, APPEND_SYSTEM, advisor, themed status line",
   "types": "./types/index.d.ts",
   "author": {
     "name": "Daniel Santana"

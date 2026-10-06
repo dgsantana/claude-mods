@@ -3,14 +3,17 @@
 
 import type { Config } from './layers'
 
-export const SEGMENT_IDS = [
-  'model', 'caveman', 'mode', 'path', 'git', 'pr', 'session', 'tokens', 'cost', 'fiveHour', 'ctx',
-] as const
+export const SEGMENT_IDS = ['model', 'caveman', 'path', 'git', 'tokens', 'cost', 'fiveHour', 'ctx'] as const
 export type SegmentId = (typeof SEGMENT_IDS)[number]
+
+// Segments of the old statusLine script that the band has no data for; configs
+// naming them are cleaned without a warning.
+export const RETIRED_SEGMENTS: readonly string[] = ['mode', 'session', 'pr']
 
 export const SEPARATORS = ['powerline', 'powerline-thin', 'slash', 'pipe', 'block', 'none', 'ascii'] as const
 export const ICON_SETS = ['nerd', 'ascii', 'none'] as const
 export const PATH_STYLES = ['basename', 'full', 'home'] as const
+export const FILLS = ['gauge', 'space', 'none'] as const
 
 export type Tab = 'statusline' | 'ttsr' | 'rules' | 'advisor' | 'context'
 export const TABS: readonly { id: Tab; label: string }[] = [
@@ -40,16 +43,20 @@ export type Setting = {
 } & SettingKind
 
 export const SETTINGS: readonly Setting[] = [
+  { key: 'statusline.enabled', tab: 'statusline', label: 'Enabled', kind: 'bool', default: true,
+    description: 'Draw the status line in the band above the prompt.' },
   { key: 'statusline.theme', tab: 'statusline', label: 'Theme', kind: 'theme', default: 'dark',
     description: 'Colour theme: one of the 102 omp themes or a custom one from .agents/mods/themes/.' },
   { key: 'statusline.separator', tab: 'statusline', label: 'Separator', kind: 'enum', options: SEPARATORS, default: 'powerline-thin',
     description: 'How segments are separated; powerline draws filled segments on the theme background.' },
+  { key: 'statusline.fill', tab: 'statusline', label: 'Fill', kind: 'enum', options: FILLS, default: 'gauge',
+    description: 'The room between the sides: a context gauge, blank space pushing the right side to the edge, or nothing.' },
   { key: 'statusline.icons', tab: 'statusline', label: 'Icons', kind: 'enum', options: ICON_SETS, default: 'nerd',
     description: 'Nerd Font glyphs, short ASCII labels, or no icons.' },
   { key: 'statusline.left', tab: 'statusline', label: 'Left segments', kind: 'segments',
-    default: ['model', 'caveman', 'mode', 'path', 'git', 'pr'], description: 'Segments on the left, in order.' },
+    default: ['model', 'caveman', 'path', 'git'], description: 'Segments on the left, in order.' },
   { key: 'statusline.right', tab: 'statusline', label: 'Right segments', kind: 'segments',
-    default: ['session', 'tokens', 'cost', 'fiveHour', 'ctx'], description: 'Segments on the right, in order.' },
+    default: ['tokens', 'cost', 'fiveHour'], description: 'Segments on the right, in order.' },
   { key: 'statusline.path.style', tab: 'statusline', label: 'Path style', kind: 'enum', options: PATH_STYLES, default: 'basename',
     description: 'Folder name only, the full path, or the path relative to home (~).' },
   { key: 'statusline.git.aheadBehind', tab: 'statusline', label: 'Git ahead/behind', kind: 'bool', default: true,
