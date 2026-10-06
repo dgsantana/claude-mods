@@ -13,8 +13,9 @@ export type StatuslineConfig = {
   left: SegmentId[]
   right: SegmentId[]
   path: { style: (typeof PATH_STYLES)[number] }
-  git: { aheadBehind: boolean }
+  git: { aheadBehind: boolean; counts: boolean }
   fiveHour: { showReset: boolean }
+  sevenDay: { showReset: boolean }
   ctx: { warnAt: number; errorAt: number }
 }
 

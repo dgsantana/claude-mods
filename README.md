@@ -12,7 +12,7 @@ including omp's nerd-font status line, drawn in the band above the prompt.
 | TTSR | Time Traveling Stream Rules, tool scope: rules checked against every `Edit`/`Write`; a reminder after the result, or a deny before it |
 | Advisor | Optional reviewer of turns that edited files; you accept or ignore its note; spend tracking and a budget |
 | Status line | omp-style themed line above the prompt (102 omp themes + custom): configurable segments, separators, icons and a context gauge filling the width |
-| `/omp` | omp-style settings pane for all of the above |
+| `/dgs` | Settings pane for all of the above |
 
 Works on Linux and Windows. Nothing reads omp's own `~/.omp` files; omp is not required.
 
@@ -63,7 +63,7 @@ See [`examples/.agents/`](examples/.agents) for a sample config, append file and
 
 ## Settings
 
-Run `/omp` in a session for the settings pane (tabs: Status line, TTSR, Rules, Advisor, Context).
+Run `/dgs` in a session for the settings pane (tabs: Status line, TTSR, Rules, Advisor, Context).
 It writes `~/.agents/mods/config.json` by default; switch to **This project** to write the
 repository's `.agents/mods/config.json`. Each row shows where its value comes from
 (`default`, `global`, `project`, `store`) and has a reset. A config.json that isn't valid JSON is
@@ -77,11 +77,13 @@ never overwritten. Everything can also be edited by hand:
 | `statusline.separator` | Status line | `"powerline-thin"` | `powerline` `powerline-thin` `slash` `pipe` `block` `none` `ascii` | How segments are separated; powerline draws filled segments on the theme background. |
 | `statusline.fill` | Status line | `"gauge"` | `gauge` `space` `none` | The room between the sides: a context gauge, blank space pushing the right side to the edge, or nothing. |
 | `statusline.icons` | Status line | `"nerd"` | `nerd` `ascii` `none` | Nerd Font glyphs, short ASCII labels, or no icons. |
-| `statusline.left` | Status line | `["model","caveman","path","git"]` | segment ids | Segments on the left, in order. |
-| `statusline.right` | Status line | `["tokens","cost","fiveHour"]` | segment ids | Segments on the right, in order. |
+| `statusline.left` | Status line | `["model","caveman","path","git","sha"]` | segment ids | Segments on the left, in order. |
+| `statusline.right` | Status line | `["activity","delta","tokens","cost","fiveHour","sevenDay","duration"]` | segment ids | Segments on the right, in order. |
 | `statusline.path.style` | Status line | `"basename"` | `basename` `full` `home` | Folder name only, the full path, or the path relative to home (~). |
 | `statusline.git.aheadBehind` | Status line | `true` | bool | Show ↑/↓ commit counts against the upstream branch. |
+| `statusline.git.counts` | Status line | `true` | bool | Show staged (+), unstaged (~) and untracked (?) file counts; off shows a * when dirty. |
 | `statusline.fiveHour.showReset` | Status line | `true` | bool | Show the time until the 5-hour usage window resets. |
+| `statusline.sevenDay.showReset` | Status line | `true` | bool | Show the time until the weekly usage window resets. |
 | `statusline.ctx.warnAt` | Status line | `50` | ≥ 0, ≤ 100 | Context use at which the segment turns to the warning colour. |
 | `statusline.ctx.errorAt` | Status line | `80` | ≥ 0, ≤ 100 | Context use at which the segment turns to the error colour. |
 | `ttsr.enabled` | TTSR | `true` | bool | Check every Edit/Write against trigger rules. |
@@ -90,9 +92,9 @@ never overwritten. Everything can also be edited by hand:
 | `ttsr.repeatGap` | TTSR | `10` | ≥ 1, ≤ 1000 | Completed turns before an after-gap rule may fire again. |
 | `rules.builtin` | Rules | `true` | bool | Load the rules vendored from oh-my-pi. |
 | `rules.disabled` | Rules | `[]` | names | Rule names to drop. |
-| `advisor.enabled` | Advisor | `false` | bool | Review turns that edited files. (stored by `/omp advisor` and the pane, not config.json) |
-| `advisor.model` | Advisor | none | string | Reviewer model id; empty reuses the session through a cached fork. (stored by `/omp advisor` and the pane, not config.json) |
-| `advisor.budgetUsd` | Advisor | none | ≥ 0 | The advisor turns itself off once total spend reaches this; empty for none. (stored by `/omp advisor` and the pane, not config.json) |
+| `advisor.enabled` | Advisor | `false` | bool | Review turns that edited files. (stored by `/dgs advisor` and the pane, not config.json) |
+| `advisor.model` | Advisor | none | string | Reviewer model id; empty reuses the session through a cached fork. (stored by `/dgs advisor` and the pane, not config.json) |
+| `advisor.budgetUsd` | Advisor | none | ≥ 0 | The advisor turns itself off once total spend reaches this; empty for none. (stored by `/dgs advisor` and the pane, not config.json) |
 | `append.enabled` | Context | `true` | bool | Append .agents/mods/APPEND_SYSTEM.md to the system prompt. |
 | `agentsMd.enabled` | Context | `true` | bool | Load AGENTS.md files beside CLAUDE.md. |
 <!-- settings:end -->
@@ -103,7 +105,7 @@ overrides the built-in price table.
 ## Status line themes
 
 `statusline.theme` takes any of the 102 themes vendored from oh-my-pi (`dark`, `light`,
-`dark-tokyo-night`, `dark-catppuccin`, `light-solarized`, …; the `/omp` pane lists them all) or a
+`dark-tokyo-night`, `dark-catppuccin`, `light-solarized`, …; the `/dgs` pane lists them all) or a
 custom theme file `.agents/mods/themes/<name>.json` in any layer:
 
 ```json
@@ -116,8 +118,26 @@ statusLineGitDirty, statusLineContext, statusLineSpend, statusLineOutput, status
 statusLineCaveman, accent, success, warning, error, dim`. Missing tokens come from `extends`
 (or `dark`).
 
-Segments: `model, caveman, path, git, tokens, cost, fiveHour, ctx`. `tokens` is the input of the
-last response (what fills the context window). Separators: `powerline` (filled, on
+Segments:
+
+| Segment | Shows |
+|---|---|
+| `model` | The session's model, shortened (`Opus 5.5 1M`) |
+| `caveman` | caveman's mode badge and savings, when caveman is active |
+| `path` | The working folder (`statusline.path.style`) |
+| `git` | Branch, ↑/↓ against upstream, and staged `+`, unstaged `~`, untracked `?` file counts |
+| `sha` | The short commit id |
+| `tokens` | The input of the last response (what fills the context window) |
+| `cost` | What the session has cost |
+| `fiveHour`, `sevenDay` | The share left of the 5-hour and weekly usage windows, with the time to reset |
+| `ctx` | Context use as a percent (the gauge shows it too) |
+| `delta` | What the last turn cost and how much it grew or shrank the context |
+| `activity` | omp-port's own work this session: TTSR rules fired, advisor spend (`!` while a note waits) |
+| `duration` | Time since the session began (a resumed session counts from its first launch) |
+
+When the row is too narrow, segments drop from the lowest priority up: `activity` and `caveman`
+first, then `sha` and `tokens`, `delta`, `duration`, `sevenDay`, `cost` and `fiveHour`, keeping
+`path`, `ctx`, `git` and `model` longest. Separators: `powerline` (filled, on
 `statusLineBg`), `powerline-thin`, `slash`, `pipe`, `block`, `none`, `ascii`. Icons: `nerd`,
 `ascii`, `none`.
 
@@ -154,17 +174,17 @@ and judged `question` rules are not supported (Claude Code exposes no stream to 
 
 ## Advisor
 
-Claude Code has its own built-in `/advisor`; omp-port's advisor lives under `/omp advisor`.
+Claude Code has its own built-in `/advisor`; omp-port's advisor lives under `/dgs advisor`.
 
 ```
-/omp advisor on | off | status | reset
-/omp advisor model <id> | default
-/omp advisor budget <usd> | none
+/dgs advisor on | off | status | reset
+/dgs advisor model <id> | default
+/dgs advisor budget <usd> | none
 ```
 
-Advisor settings (from `/omp advisor` or the pane's Advisor tab) live in the plugin's store, so they apply to every project and outlive the session;
+Advisor settings (from `/dgs advisor` or the pane's Advisor tab) live in the plugin's store, so they apply to every project and outlive the session;
 once set they take precedence over `advisor.*` in config.json. When the budget trips the advisor turns
-itself off: raise the budget (or `/omp advisor reset`) and `/omp advisor on` again.
+itself off: raise the budget (or `/dgs advisor reset`) and `/dgs advisor on` again.
 
 After a turn that edited files, the advisor asks a reviewer for `OK` or one short note. A note
 shows as a toast and a band above the prompt with **Send with next prompt** (default) and

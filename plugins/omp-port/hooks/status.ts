@@ -2,12 +2,12 @@
 // and how it is laid out as coloured spans in the configured theme, separator
 // style and icon set.
 
-import type { Caveman, GitInfo, StatusData } from '../types'
+import type { Activity, Caveman, GitInfo, RateWindow, StatusData, TurnDelta } from '../types'
 import type { SegmentId } from './settings-schema'
 import type { StatuslineConfig } from './statusline-config'
 import { type ResolvedTheme, type ThemeToken, toHex } from './themes'
 
-export type { Caveman, GitInfo, StatusData }
+export type { Activity, Caveman, GitInfo, RateWindow, StatusData, TurnDelta }
 
 export type Span = { text: string; color: string; backgroundColor?: string }
 
@@ -17,7 +17,9 @@ export function parsePorcelain(out: string): GitInfo | undefined {
   let oid = ''
   let ahead = 0
   let behind = 0
-  let dirty = false
+  let staged = 0
+  let unstaged = 0
+  let untracked = 0
   for (const line of out.split('\n')) {
     if (line.startsWith('# branch.oid ')) oid = line.slice(13).trim()
     else if (line.startsWith('# branch.head ')) branch = line.slice(14).trim()
@@ -25,10 +27,16 @@ export function parsePorcelain(out: string): GitInfo | undefined {
       const m = /\+(\d+) -(\d+)/.exec(line)
       ahead = Number(m?.[1] ?? 0)
       behind = Number(m?.[2] ?? 0)
-    } else if (line.trim() !== '' && !line.startsWith('#')) dirty = true
+    } else if (line.startsWith('1 ') || line.startsWith('2 ')) {
+      // `XY`: the index (staged) state, then the worktree state; `.` is unchanged.
+      if (line[2] !== '.') staged++
+      if (line[3] !== '.') unstaged++
+    } else if (line.startsWith('u ')) unstaged++
+    else if (line.startsWith('? ')) untracked++
   }
-  if (branch === '(detached)' || branch === '') branch = oid.slice(0, 7)
-  return { branch, dirty, ahead, behind }
+  const sha = oid.slice(0, 7)
+  if (branch === '(detached)' || branch === '') branch = sha
+  return { branch, dirty: staged + unstaged + untracked > 0, ahead, behind, sha, staged, unstaged, untracked }
 }
 
 // Caveman's flag files, read the way its own status line reads them: each cut
@@ -68,6 +76,7 @@ export function formatDuration(ms: number): string {
   const min = Math.floor(ms / 60_000)
   if (min < 1) return '<1m'
   const h = Math.floor(min / 60)
+  if (h >= 24) return `${Math.floor(h / 24)}d${String(h % 24).padStart(2, '0')}h`
   return h > 0 ? `${h}h${String(min % 60).padStart(2, '0')}m` : `${min}m`
 }
 
@@ -112,10 +121,10 @@ type IconKey = SegmentId | 'savings'
 const ICONS: Record<StatuslineConfig['icons'], Record<IconKey, string>> = {
   nerd: {
     model: '\u{f06a9}', caveman: '🪨', savings: '⛏', path: '', git: '',
-    tokens: '', cost: '', fiveHour: '\u{f051f}', ctx: '',
+    tokens: '', cost: '', fiveHour: '\u{f051f}', ctx: '', duration: '\uf017', sha: '\uf417', sevenDay: '\uf073', delta: 'Δ', activity: '\uf0e7',
   },
-  ascii: { model: 'M', caveman: 'cave', savings: '-', path: '@', git: 'git', tokens: 'T', cost: '', fiveHour: '5h', ctx: 'ctx' },
-  none: { model: '', caveman: '', savings: '', path: '', git: '', tokens: '', cost: '', fiveHour: '', ctx: '' },
+  ascii: { model: 'M', caveman: 'cave', savings: '-', path: '@', git: 'git', tokens: 'T', cost: '', fiveHour: '5h', ctx: 'ctx', duration: 'up', sha: '#', sevenDay: '7d', delta: 'd', activity: 'mods' },
+  none: { model: '', caveman: '', savings: '', path: '', git: '', tokens: '', cost: '', fiveHour: '', ctx: '', duration: '', sha: '', sevenDay: '', delta: '', activity: '' },
 }
 
 // Glyph between segments: [left side, right side].
@@ -150,29 +159,62 @@ const SEGMENTS: Record<SegmentId, (c: Ctx) => Seg | undefined> = {
   git: ({ data, config, icon }) => {
     const g = data.git
     if (!g) return undefined
-    let text = labelled(icon('git'), `${g.branch}${g.dirty ? '*' : ''}`)
+    let text = labelled(icon('git'), `${g.branch}${g.dirty && !config.git.counts ? '*' : ''}`)
     if (config.git.aheadBehind && g.ahead) text += ` ↑${g.ahead}`
     if (config.git.aheadBehind && g.behind) text += ` ↓${g.behind}`
+    if (config.git.counts) {
+      if (g.staged) text += ` +${g.staged}`
+      if (g.unstaged) text += ` ~${g.unstaged}`
+      if (g.untracked) text += ` ?${g.untracked}`
+    }
     return { text, colour: g.dirty ? 'statusLineGitDirty' : 'statusLineGitClean' }
   },
+  sha: ({ data, icon }) => (data.git?.sha ? { text: labelled(icon('sha'), data.git.sha), colour: 'dim' } : undefined),
   tokens: ({ data, icon }) =>
     data.tokens ? { text: labelled(icon('tokens'), formatTokens(data.tokens)), colour: 'statusLineOutput' } : undefined,
   cost: ({ data, icon }) =>
     typeof data.usd === 'number' ? { text: labelled(icon('cost'), `$${data.usd.toFixed(2)}`), colour: 'statusLineCost' } : undefined,
-  fiveHour: ({ data, config, icon }) => {
-    const w = data.fiveHour
-    if (!w) return undefined
-    const left = Math.max(0, Math.round(100 - w.percentUsed))
-    let text = labelled(icon('fiveHour'), `${left}% left`)
-    if (config.fiveHour.showReset && w.resetsAt !== undefined && w.resetsAt > data.now) {
-      text += ` · ${formatDuration(w.resetsAt - data.now)}`
-    }
-    return { text, colour: left < 20 ? 'error' : left < 50 ? 'warning' : 'success' }
-  },
+  fiveHour: ({ data, config, icon }) => rateSeg(data.fiveHour, data.now, config.fiveHour.showReset, icon('fiveHour')),
+  sevenDay: ({ data, config, icon }) => rateSeg(data.sevenDay, data.now, config.sevenDay.showReset, icon('sevenDay')),
   ctx: ({ data, config, icon }) =>
     typeof data.percent === 'number'
       ? { text: labelled(icon('ctx'), `${Math.round(data.percent)}%`), colour: ctxColour(data.percent, config) }
       : undefined,
+  delta: ({ data, icon }) => {
+    const d = data.lastTurn
+    if (!d) return undefined
+    const parts: string[] = []
+    if (d.usd >= 0.005) parts.push(`+$${d.usd.toFixed(2)}`)
+    if (d.tokens !== 0) parts.push(`${d.tokens > 0 ? '+' : '-'}${formatTokens(Math.abs(d.tokens))}`)
+    return parts.length ? { text: labelled(icon('delta'), parts.join(' ')), colour: 'statusLineSpend' } : undefined
+  },
+  activity: ({ data, icon }) => {
+    const a = data.activity
+    if (!a) return undefined
+    const parts: string[] = []
+    if (a.ttsrHits > 0) parts.push(`ttsr ${a.ttsrHits}`)
+    if (a.advisor) parts.push(`adv $${a.advisor.usd.toFixed(2)}${a.advisor.note ? ' !' : ''}`)
+    return parts.length ? { text: labelled(icon('activity'), parts.join(' · ')), colour: 'accent' } : undefined
+  },
+  duration: ({ data, icon }) =>
+    data.startedAt !== undefined && data.now >= data.startedAt
+      ? { text: labelled(icon('duration'), formatDuration(data.now - data.startedAt)), colour: 'dim' }
+      : undefined,
+}
+
+// A usage window as the share left, coloured by it, with the time to its reset.
+function rateSeg(w: RateWindow | undefined, now: number, showReset: boolean, icon: string): Seg | undefined {
+  if (!w) return undefined
+  const left = Math.max(0, Math.round(100 - w.percentUsed))
+  let text = labelled(icon, `${left}% left`)
+  if (showReset && w.resetsAt !== undefined && w.resetsAt > now) text += ` · ${formatDuration(w.resetsAt - now)}`
+  return { text, colour: left < 20 ? 'error' : left < 50 ? 'warning' : 'success' }
+}
+
+// Which segments stay longest when the row is too narrow: the highest first.
+const PRIORITY: Record<SegmentId, number> = {
+  model: 10, git: 9, path: 8, ctx: 8, cost: 7, fiveHour: 7, sevenDay: 6, duration: 5,
+  delta: 4, tokens: 3, sha: 3, caveman: 2, activity: 2,
 }
 
 function ctxColour(percent: number, config: StatuslineConfig): ThemeToken {
@@ -213,16 +255,26 @@ export function statusSpans(
   theme: ResolvedTheme,
   columns?: number,
 ): { left: Span[]; middle: Span[]; right: Span[] } {
-  const { left, right } = sides(data, config, theme)
-  const used = cellWidth([...left, ...right].map(s => s.text).join(''))
-  return { left, middle: fill(data, config, theme, columns === undefined ? 0 : columns - used), right }
+  const ctx: Ctx = { data, config, icon: k => ICONS[config.icons][k] }
+  const draw = (ids: readonly SegmentId[]) =>
+    ids.flatMap(id => {
+      const seg = SEGMENTS[id]?.(ctx)
+      return seg ? [{ ...seg, id }] : []
+    })
+  let segs = { left: draw(config.left), right: draw(config.right) }
+  let spans = sides(segs.left, segs.right, config, theme)
+  // Too wide: drop the lowest-priority segment (the rightmost of equals) until it fits.
+  const width = () => cellWidth([...spans.left, ...spans.right].map(s => s.text).join(''))
+  while (columns !== undefined && width() + 2 > columns && segs.left.length + segs.right.length > 0) {
+    const all = [...segs.left, ...segs.right]
+    const victim = all.reduce((low, s) => (PRIORITY[s.id] <= PRIORITY[low.id] ? s : low))
+    segs = { left: segs.left.filter(s => s !== victim), right: segs.right.filter(s => s !== victim) }
+    spans = sides(segs.left, segs.right, config, theme)
+  }
+  return { ...spans, middle: fill(data, config, theme, columns === undefined ? 0 : columns - width()) }
 }
 
-function sides(data: StatusData, config: StatuslineConfig, theme: ResolvedTheme): { left: Span[]; right: Span[] } {
-  const ctx: Ctx = { data, config, icon: k => ICONS[config.icons][k] }
-  const draw = (ids: readonly SegmentId[]) => ids.map(id => SEGMENTS[id]?.(ctx)).filter((s): s is Seg => s !== undefined)
-  const left = draw(config.left)
-  const right = draw(config.right)
+function sides(left: Seg[], right: Seg[], config: StatuslineConfig, theme: ResolvedTheme): { left: Span[]; right: Span[] } {
   const [lg, rg] = SEPARATOR_GLYPHS[config.separator]
   const sep = toHex(theme.statusLineSep)
 

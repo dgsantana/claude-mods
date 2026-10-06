@@ -1,4 +1,4 @@
-// What the /omp pane shows: each setting's effective value and the layer it
+// What the /dgs pane shows: each setting's effective value and the layer it
 // comes from, and where "this project" writes.
 
 import { getPath } from './config-patch'
@@ -65,12 +65,14 @@ export function rulesRows(rules: readonly Rule[], cfg: Config['rules']): RuleRow
 }
 
 const SAMPLE: Record<SegmentId, string> = {
-  model: 'Opus', caveman: 'ULTRA', path: 'project', git: 'main*', tokens: '12.8k', cost: '$0.42', fiveHour: '77% left', ctx: '31%',
+  model: 'Opus', caveman: 'ULTRA', path: 'project', git: 'main*', tokens: '12.8k', cost: '$0.42', fiveHour: '77% left', ctx: '31%', duration: '26m',
+  sha: '01a0fde', sevenDay: '82% left', delta: '+$0.12', activity: 'ttsr 1',
 }
 
 export const SEGMENT_TOKEN: Record<SegmentId, ThemeToken> = {
   model: 'statusLineModel', caveman: 'statusLineCaveman', path: 'statusLinePath', git: 'statusLineGitDirty',
-  tokens: 'statusLineOutput', cost: 'statusLineCost', fiveHour: 'success', ctx: 'statusLineContext',
+  tokens: 'statusLineOutput', cost: 'statusLineCost', fiveHour: 'success', ctx: 'statusLineContext', duration: 'dim',
+  sha: 'dim', sevenDay: 'success', delta: 'statusLineSpend', activity: 'accent',
 }
 
 export type PreviewSegment = { id: SegmentId; text: string; colour: string }

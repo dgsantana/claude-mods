@@ -1,9 +1,11 @@
 // The catalogue of every omp-port setting. It drives the config defaults,
-// validation, the /omp pane's rows and the README's settings table.
+// validation, the /dgs pane's rows and the README's settings table.
 
 import type { Config } from './layers'
 
-export const SEGMENT_IDS = ['model', 'caveman', 'path', 'git', 'tokens', 'cost', 'fiveHour', 'ctx'] as const
+export const SEGMENT_IDS = [
+  'model', 'caveman', 'path', 'git', 'sha', 'tokens', 'cost', 'fiveHour', 'sevenDay', 'ctx', 'delta', 'activity', 'duration',
+] as const
 export type SegmentId = (typeof SEGMENT_IDS)[number]
 
 // Segments of the old statusLine script that the band has no data for; configs
@@ -54,15 +56,19 @@ export const SETTINGS: readonly Setting[] = [
   { key: 'statusline.icons', tab: 'statusline', label: 'Icons', kind: 'enum', options: ICON_SETS, default: 'nerd',
     description: 'Nerd Font glyphs, short ASCII labels, or no icons.' },
   { key: 'statusline.left', tab: 'statusline', label: 'Left segments', kind: 'segments',
-    default: ['model', 'caveman', 'path', 'git'], description: 'Segments on the left, in order.' },
+    default: ['model', 'caveman', 'path', 'git', 'sha'], description: 'Segments on the left, in order.' },
   { key: 'statusline.right', tab: 'statusline', label: 'Right segments', kind: 'segments',
-    default: ['tokens', 'cost', 'fiveHour'], description: 'Segments on the right, in order.' },
+    default: ['activity', 'delta', 'tokens', 'cost', 'fiveHour', 'sevenDay', 'duration'], description: 'Segments on the right, in order.' },
   { key: 'statusline.path.style', tab: 'statusline', label: 'Path style', kind: 'enum', options: PATH_STYLES, default: 'basename',
     description: 'Folder name only, the full path, or the path relative to home (~).' },
   { key: 'statusline.git.aheadBehind', tab: 'statusline', label: 'Git ahead/behind', kind: 'bool', default: true,
     description: 'Show ↑/↓ commit counts against the upstream branch.' },
+  { key: 'statusline.git.counts', tab: 'statusline', label: 'Git file counts', kind: 'bool', default: true,
+    description: 'Show staged (+), unstaged (~) and untracked (?) file counts; off shows a * when dirty.' },
   { key: 'statusline.fiveHour.showReset', tab: 'statusline', label: '5h reset time', kind: 'bool', default: true,
     description: 'Show the time until the 5-hour usage window resets.' },
+  { key: 'statusline.sevenDay.showReset', tab: 'statusline', label: '7d reset time', kind: 'bool', default: true,
+    description: 'Show the time until the weekly usage window resets.' },
   { key: 'statusline.ctx.warnAt', tab: 'statusline', label: 'Context warn %', kind: 'number', min: 0, max: 100, default: 50,
     description: 'Context use at which the segment turns to the warning colour.' },
   { key: 'statusline.ctx.errorAt', tab: 'statusline', label: 'Context error %', kind: 'number', min: 0, max: 100, default: 80,

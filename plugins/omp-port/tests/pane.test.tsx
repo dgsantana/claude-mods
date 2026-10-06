@@ -6,13 +6,13 @@ const PANE = { plugin: 'omp-port', surface: 'terminal', component: 'Pane', reque
 const GLOBAL = '/home/u/.agents/mods/config.json'
 const PROJECT = '/repo/.agents/mods/config.json'
 
-test('/omp opens the settings pane; /omp ttsr opens on TTSR', async ($, on) => {
+test('/dgs opens the settings pane; /dgs ttsr opens on TTSR', async ($, on) => {
   const w = world(on, { themes: THEMES })
   mock.store(on, {})
   on('ui.render', () => null as never)
-  await $.command.run({ command: 'omp', args: '' } as never)
+  await $.command.run({ command: 'dgs', args: '' } as never)
   expect(w.opened).toEqual(['omp-port-settings'])
-  await $.command.run({ command: 'omp', args: 'ttsr' } as never)
+  await $.command.run({ command: 'dgs', args: 'ttsr' } as never)
   const pane = await $.ui.mount(PANE)
   expect(await pane.find({ key: 'set-ttsr.enabled' })).toBeDefined()
 })
@@ -99,7 +99,7 @@ test('store-backed advisor settings write the store, not config', async ($, on) 
   await pane.press({ key: 'tab-advisor' })
   await pane.press({ key: 'set-advisor.enabled' })
   expect(Object.keys(w.writes)).toEqual([])
-  const status = (await $.command.run({ command: 'omp', args: 'advisor status' } as never)).text ?? ''
+  const status = (await $.command.run({ command: 'dgs', args: 'advisor status' } as never)).text ?? ''
   expect(status).toMatch(/^Advisor on/)
 })
 
@@ -182,7 +182,7 @@ test('advisor tab: spend shown, reset spend, budget goes to the store', async ($
   await pane.press({ key: 'advisor-reset-spend' })
   await pane.input({ key: 'set-advisor.budgetUsd', text: '3' })
   expect(Object.keys(w.writes)).toEqual([])
-  const status = (await $.command.run({ command: 'omp', args: 'advisor status' } as never)).text ?? ''
+  const status = (await $.command.run({ command: 'dgs', args: 'advisor status' } as never)).text ?? ''
   expect(status).toContain('$3.00')
   expect(status).toContain('total $0.000')
 })

@@ -26,7 +26,7 @@ const DATA: StatusData = {
   model: 'Opus 5.5',
   cwd: '/home/u/projects/app',
   home: '/home/u',
-  git: { branch: 'main', dirty: false, ahead: 2, behind: 1 },
+  git: { branch: 'main', dirty: false, ahead: 2, behind: 1, sha: '01a0fde', staged: 0, unstaged: 0, untracked: 0 },
   tokens: 1000,
   percent: 60,
   usd: 0.5,
@@ -41,10 +41,24 @@ const line = (data: StatusData, config: StatuslineConfig, t = DARK, columns?: nu
 describe('parsePorcelain', () => {
   test('branch, ahead/behind and dirty from porcelain v2 output', () => {
     const out = '# branch.oid abc\n# branch.head main\n# branch.upstream origin/main\n# branch.ab +2 -1\n1 .M N... 100644 100644 100644 a b file.ts\n'
-    expect(parsePorcelain(out)).toEqual({ branch: 'main', dirty: true, ahead: 2, behind: 1 })
+    expect(parsePorcelain(out)).toEqual({ branch: 'main', dirty: true, ahead: 2, behind: 1, sha: 'abc', staged: 0, unstaged: 1, untracked: 0 })
   })
   test('clean detached head shows the short oid', () => {
-    expect(parsePorcelain('# branch.oid abcdef1234\n# branch.head (detached)\n')).toEqual({ branch: 'abcdef1', dirty: false, ahead: 0, behind: 0 })
+    expect(parsePorcelain('# branch.oid abcdef1234\n# branch.head (detached)\n')).toEqual({
+      branch: 'abcdef1', dirty: false, ahead: 0, behind: 0, sha: 'abcdef1', staged: 0, unstaged: 0, untracked: 0,
+    })
+  })
+  test('staged, unstaged, untracked and conflicted entries are counted', () => {
+    const out = [
+      '# branch.oid 01a0fde4c0ffee', '# branch.head main',
+      '1 M. N... 100644 100644 100644 a b staged.ts',
+      '1 MM N... 100644 100644 100644 a b both.ts',
+      '1 .D N... 100644 100644 000000 a b gone.ts',
+      '2 R. N... 100644 100644 100644 a b R100 new.ts\told.ts',
+      'u UU N... 100644 100644 100644 100644 a b c conflict.ts',
+      '? notes.md', '? tmp/', '',
+    ].join('\n')
+    expect(parsePorcelain(out)).toEqual({ branch: 'main', dirty: true, ahead: 0, behind: 0, sha: '01a0fde', staged: 3, unstaged: 3, untracked: 2 })
   })
   test('empty output is no repository', () => {
     expect(parsePorcelain('')).toBeUndefined()
@@ -131,6 +145,35 @@ describe('fill', () => {
   })
 })
 
+describe('dropping by priority', () => {
+  const ALL: StatusData = {
+    ...DATA, percent: 58, window: 1_000_000, startedAt: NOW - 26 * 60_000, caveman: { mode: 'ULTRA' },
+    fiveHour: { percentUsed: 20 }, lastTurn: { usd: 0.1, tokens: 1000 },
+  }
+  const C = cfg({ icons: 'none', separator: 'none', left: ['model', 'caveman', 'path', 'git'], right: ['delta', 'tokens', 'cost', 'fiveHour', 'duration'] })
+  test('a row that fits keeps every segment', () => {
+    const l = line(ALL, C, DARK, 200)
+    expect(l.left).toContain('ULTRA')
+    expect(l.right).toContain('+$0.10')
+  })
+  test('a narrow row drops the lowest priority first and never exceeds the width', () => {
+    const l = line(ALL, C, DARK, 60)
+    expect(cellWidth(l.left + l.middle + l.right)).toBeLessThanOrEqual(60)
+    expect(l.left).toContain('Opus 5.5')
+    expect(l.left).toContain('main')
+    expect(l.right).toContain('$0.50')
+    expect(l.left).not.toContain('ULTRA')
+    expect(l.right).not.toContain('+$0.10')
+  })
+  test('order is kept for what remains', () => {
+    const l = line(ALL, C, DARK, 60)
+    expect(l.left.indexOf('Opus')).toBeLessThan(l.left.indexOf('main'))
+  })
+  test('without a width nothing is dropped', () => {
+    expect(line(ALL, C).left).toContain('ULTRA')
+  })
+})
+
 describe('format helpers', () => {
   test('tokens', () => {
     expect(formatTokens(950)).toBe('950')
@@ -141,6 +184,7 @@ describe('format helpers', () => {
     expect(formatDuration(2 * 3600_000 + 13 * 60_000)).toBe('2h13m')
     expect(formatDuration(45 * 60_000)).toBe('45m')
     expect(formatDuration(20_000)).toBe('<1m')
+    expect(formatDuration(3 * 86_400_000 + 4 * 3600_000 + 59 * 60_000)).toBe('3d04h')
   })
 })
 
@@ -189,13 +233,43 @@ describe('statusSpans', () => {
     expect(p('home', 'C:\\Users\\u\\proj')).toBe('C:\\Users\\u\\proj')
     expect(p('home', 'C:\\Users\\u\\proj', 'C:\\Users\\u')).toBe('~\\proj')
   })
-  test('git: dirty mark and ahead/behind toggle', () => {
-    const g = (aheadBehind: boolean, dirty = false) =>
-      line({ ...DATA, git: { branch: 'main', dirty, ahead: 2, behind: 1 } }, cfg({ left: ['git'], right: [], icons: 'none', git: { aheadBehind } }))
-    expect(g(true).left).toBe('main ↑2 ↓1')
-    expect(g(false).left).toBe('main')
-    expect(g(false, true).left).toBe('main*')
-    expect(g(false, true).spans[0]?.color).toBe(toHex(DARK.statusLineGitDirty))
+  test('git: ahead/behind and counts toggles; the dirty mark stands in when counts are off', () => {
+    const CLEAN = { branch: 'main', dirty: false, ahead: 2, behind: 1, sha: '01a0fde', staged: 0, unstaged: 0, untracked: 0 }
+    const DIRTY = { ...CLEAN, dirty: true, staged: 3, unstaged: 2, untracked: 5 }
+    const g = (git: typeof CLEAN, aheadBehind: boolean, counts: boolean) =>
+      line({ ...DATA, git }, cfg({ left: ['git'], right: [], icons: 'none', git: { aheadBehind, counts } }))
+    expect(g(CLEAN, true, true).left).toBe('main ↑2 ↓1')
+    expect(g(CLEAN, false, true).left).toBe('main')
+    expect(g(DIRTY, false, true).left).toBe('main +3 ~2 ?5')
+    expect(g(DIRTY, false, false).left).toBe('main*')
+    expect(g(DIRTY, false, false).spans[0]?.color).toBe(toHex(DARK.statusLineGitDirty))
+  })
+  test('sha: the short commit id', () => {
+    expect(line(DATA, cfg({ left: ['sha'], right: [], icons: 'none' })).left).toBe('01a0fde')
+    expect(line({ ...DATA, git: undefined }, cfg({ left: ['sha'], right: [], icons: 'none' })).left).toBe('')
+  })
+  test('seven-day window: like the five-hour one, with a day-long countdown', () => {
+    const seven = (used: number, resetsAt?: number, showReset = true) =>
+      line({ now: NOW, sevenDay: { percentUsed: used, resetsAt } }, cfg({ left: [], right: ['sevenDay'], icons: 'none', sevenDay: { showReset } }))
+    expect(seven(18, NOW + 3 * 86_400_000 + 4 * 3600_000).right).toBe('82% left · 3d04h')
+    expect(seven(18, NOW + 3600_000, false).right).toBe('82% left')
+    expect(seven(90).spans[0]?.color).toBe(toHex(DARK.error))
+    expect(line({ now: NOW }, cfg({ left: [], right: ['sevenDay'] })).right).toBe('')
+  })
+  test('delta: what the last turn cost and how it moved the context', () => {
+    const d = (lastTurn?: StatusData['lastTurn']) => line({ now: NOW, lastTurn }, cfg({ left: [], right: ['delta'], icons: 'none' })).right
+    expect(d({ usd: 0.124, tokens: 98_300 })).toBe('+$0.12 +98.3k')
+    expect(d({ usd: 0.5, tokens: -40_000 })).toBe('+$0.50 -40.0k')
+    expect(d({ usd: 0.001, tokens: 0 })).toBe('')
+    expect(d()).toBe('')
+  })
+  test('activity: TTSR hits and advisor spend, a mark for a pending note', () => {
+    const a = (activity?: StatusData['activity']) => line({ now: NOW, activity }, cfg({ left: [], right: ['activity'], icons: 'none' })).right
+    expect(a({ ttsrHits: 2 })).toBe('ttsr 2')
+    expect(a({ ttsrHits: 0, advisor: { usd: 0.031, note: false } })).toBe('adv $0.03')
+    expect(a({ ttsrHits: 1, advisor: { usd: 0.2, note: true } })).toBe('ttsr 1 · adv $0.20 !')
+    expect(a({ ttsrHits: 0 })).toBe('')
+    expect(a()).toBe('')
   })
   test('caveman after the model, with savings', () => {
     const l = line({ ...DATA, caveman: { mode: 'ULTRA', savings: '41% saved' } }, cfg({ left: ['model', 'caveman'], right: [], separator: 'none' }))
@@ -217,6 +291,13 @@ describe('statusSpans', () => {
     expect(at(10)).toBe(toHex(DARK.statusLineContext))
     expect(at(60)).toBe(toHex(DARK.warning))
     expect(at(90)).toBe(toHex(DARK.error))
+  })
+  test('duration: time since the session began; nothing without a start', () => {
+    const d = (startedAt?: number) => line({ now: NOW, startedAt }, cfg({ left: [], right: ['duration'], icons: 'none' })).right
+    expect(d(NOW - (26 * 60_000 + 34_000))).toBe('26m')
+    expect(d(NOW - 3 * 3600_000)).toBe('3h00m')
+    expect(d()).toBe('')
+    expect(line({ now: NOW, startedAt: NOW - 60_000 }, cfg({ left: [], right: ['duration'], icons: 'nerd' })).right).toBe(' 1m')
   })
   test('tokens and cost', () => {
     const l = line(DATA, cfg({ left: [], right: ['tokens', 'cost'], icons: 'none', separator: 'none' }))

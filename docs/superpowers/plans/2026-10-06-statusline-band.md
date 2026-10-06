@@ -94,3 +94,13 @@ cd plugins/omp-port && bunx -p typescript@5.9 tsc -p . --noEmit
 
 Then a real session (`claude --plugin-dir plugins/omp-port --debug-file <f>`), grep the log for
 `does not validate`, and check the timer does not double after a hot reload.
+
+## Additions (0.4.0)
+
+- Command renamed `/omp` to `/dgs`: a built-in can claim any common word; initials it will not.
+- Segments `duration`, `sha`, `sevenDay`, `delta`, `activity`; `git` gains staged, unstaged and
+  untracked counts (`statusline.git.counts`).
+- Width dropping: `PRIORITY` in `status.ts` ranks segments; while left + right + 2 exceeds the
+  band's columns the lowest (rightmost of equals) is dropped.
+- `delta` is usage at main-thread `turn.complete` less usage at `turn.start` (state `turnBase`,
+  `lastTurn`); `activity` reads `ttsrHits` (counted in `ttsr()`) and the advisor's session spend.

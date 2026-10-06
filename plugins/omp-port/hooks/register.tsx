@@ -9,7 +9,7 @@ import { discover, homeDir, type Io, type Snapshot } from './load'
 import { paneRows, parseListInput, previewSegments, projectLayerDir, rulesRows, SELECT_MAX, segmentsEdit, themeGroups } from './pane-model'
 import { isWindowsPath, join } from './paths'
 import { renderRulesSection } from './rules'
-import { parseCaveman, parsePorcelain, type StatusData, statusSpans } from './status'
+import { parseCaveman, parsePorcelain, type RateWindow, type StatusData, statusSpans, type TurnDelta } from './status'
 import { SEGMENT_IDS, type SegmentId, SETTINGS, type Setting, TABS, type Tab, validate } from './settings-schema'
 import { sanitizeStatusline, type StatuslineConfig } from './statusline-config'
 import { listThemes, resolveTheme } from './themes'
@@ -110,6 +110,7 @@ function compiledRules($: EngineInterface, snap: Snapshot): CompiledRule[] {
 
 const REPEAT = { plugin: 'omp-port', key: 'ttsrRepeat' } as const
 const AST_HINTED = { plugin: 'omp-port', key: 'astGrepHinted' } as const
+const TTSR_HITS = { plugin: 'omp-port', key: 'ttsrHits' } as const
 
 function astGrepInstallHint(windows: boolean): string {
   return windows
@@ -187,6 +188,7 @@ async function ttsr($: EngineInterface, e: { tool: string }, run: () => Promise<
   }
   if (fired.length === 0) return run()
   await $.state.set(REPEAT, state)
+  await $.state.set(TTSR_HITS, ((await $.state.get(TTSR_HITS)).value ?? 0) + fired.length)
   $.ui.toast(`omp-port TTSR: ${fired.join(', ')}`)
   if (deny.length > 0) return { deny: [...deny, ...remind].join('\n\n') }
   const result = await run()
@@ -305,7 +307,7 @@ async function advisorCommand($: EngineInterface, args: string): Promise<string>
       const estimatedFor = (await $.state.get(ESTIMATED_FOR)).value
       const reached = s.budgetUsd !== undefined && s.totalUsd >= s.budgetUsd
       return [
-        `Advisor ${s.enabled ? 'on' : 'off'}${s.enabled && reached ? ' (budget reached; raise it or /omp advisor reset)' : ''}`,
+        `Advisor ${s.enabled ? 'on' : 'off'}${s.enabled && reached ? ' (budget reached; raise it or /dgs advisor reset)' : ''}`,
         `model: ${s.model ?? 'session model (fork)'}`,
         `budget: ${s.budgetUsd !== undefined ? `$${s.budgetUsd.toFixed(2)}` : 'none'}${reached ? ' — budget reached' : ''}`,
         `spent: session $${session.toFixed(3)}, total $${s.totalUsd.toFixed(3)}${estimatedFor ? ` (estimated for ${estimatedFor})` : ''}`,
@@ -313,11 +315,11 @@ async function advisorCommand($: EngineInterface, args: string): Promise<string>
       ].join(' · ')
     }
     default:
-      return 'Usage: /omp advisor on|off|status|model <id|default>|budget <usd|none>|reset'
+      return 'Usage: /dgs advisor on|off|status|model <id|default>|budget <usd|none>|reset'
   }
 }
 
-// The /omp settings pane: tabs over the settings catalogue, writing the
+// The /dgs settings pane: tabs over the settings catalogue, writing the
 // global or the project layer's config.json (store-backed rows to $.store).
 const PANE_ID = 'omp-port-settings'
 const PANE_TAB = { plugin: 'omp-port', key: 'paneTab' } as const
@@ -505,6 +507,8 @@ async function paneExtras(
 // each main-thread turn and on a timer (git changes, caveman mode, the reset
 // countdown).
 const STATUS_DATA = { plugin: 'omp-port', key: 'statusData' } as const
+const TURN_BASE = { plugin: 'omp-port', key: 'turnBase' } as const
+const LAST_TURN = { plugin: 'omp-port', key: 'lastTurn' } as const
 const STATUS_TICK_MS = 5000
 let refreshing = false
 let stopTick: (() => void) | undefined
@@ -522,6 +526,30 @@ async function readCavemanFile($: EngineInterface, path: string): Promise<string
   }
 }
 
+type RateLimit = { kind: string; percentUsed: number; resetsAt?: string }
+
+function rateWindow(limits: readonly RateLimit[], kind: string): RateWindow | undefined {
+  const w = limits.find(r => r.kind === kind)
+  return w ? { percentUsed: w.percentUsed, resetsAt: w.resetsAt ? Date.parse(w.resetsAt) : undefined } : undefined
+}
+
+// The session's cost and context fill now, to measure a turn by.
+async function usageMark($: EngineInterface): Promise<TurnDelta | undefined> {
+  try {
+    const usage = await $.session.usage()
+    return { usd: usage.cost?.usd ?? 0, tokens: usage.context.tokens ?? 0 }
+  } catch {
+    return undefined
+  }
+}
+
+async function recordTurnDelta($: EngineInterface): Promise<void> {
+  const base = (await $.state.get(TURN_BASE)).value
+  const now = await usageMark($)
+  if (!base || !now) return
+  await $.state.set(LAST_TURN, { usd: now.usd - base.usd, tokens: now.tokens - base.tokens })
+}
+
 async function gatherStatus($: EngineInterface): Promise<StatusData> {
   const data: StatusData = { now: Math.floor((await $.clock.now()) / 60_000) * 60_000 }
   const cwd = await $.session.cwd().catch(() => undefined)
@@ -531,13 +559,22 @@ async function gatherStatus($: EngineInterface): Promise<StatusData> {
   data.model = await $.session.model().catch(() => undefined)
   try {
     const usage = await $.session.usage()
+    data.startedAt = usage.startedAt
     data.tokens = usage.context.tokens
     data.percent = usage.context.percent
     data.window = usage.context.window
     data.usd = usage.cost?.usd
-    const five = usage.rateLimits.find(r => r.kind === 'five_hour')
-    if (five) data.fiveHour = { percentUsed: five.percentUsed, resetsAt: five.resetsAt ? Date.parse(five.resetsAt) : undefined }
+    data.fiveHour = rateWindow(usage.rateLimits, 'five_hour')
+    data.sevenDay = rateWindow(usage.rateLimits, 'seven_day')
   } catch {}
+  data.lastTurn = (await $.state.get(LAST_TURN)).value ?? undefined
+  const advisor = await advisorSettings($).catch(() => undefined)
+  data.activity = {
+    ttsrHits: (await $.state.get(TTSR_HITS)).value ?? 0,
+    advisor: advisor?.enabled
+      ? { usd: (await $.state.get(SESSION_USD)).value ?? 0, note: Boolean((await $.state.get(NOTE)).value) }
+      : undefined,
+  }
   try {
     const r = await $.process.run(['git', 'status', '--porcelain=v2', '--branch'], { cwd, timeoutMs: 1000, env: { GIT_OPTIONAL_LOCKS: '0' } })
     if (r.exitCode === 0) data.git = parsePorcelain(r.stdout)
@@ -593,12 +630,12 @@ export const register: Register = on => {
     // One refused registration (a name a built-in owns) must not stop the rest.
     try {
       await $.command.register({
-        name: 'omp',
-        description: 'omp-port settings pane; `/omp advisor on|off|status|model|budget|reset` for the advisor',
+        name: 'dgs',
+        description: 'Settings pane (status line, TTSR, rules, advisor, context); `/dgs advisor on|off|status|model|budget|reset` for the advisor',
         argumentHint: '[statusline|ttsr|rules|advisor|context] | advisor <verb>',
       })
     } catch (err) {
-      warnOnce($, `can't register /omp (${errText(err)})`)
+      warnOnce($, `can't register /dgs (${errText(err)})`)
     }
     const started = await next(e)
     stopTick?.()
@@ -614,22 +651,24 @@ export const register: Register = on => {
   on('turn.start', async ($, e, next) => {
     cached = undefined
     await $.state.set(EDITS, [])
+    const mark = await usageMark($)
+    if (mark) await $.state.set(TURN_BASE, mark)
     return next(e)
   })
 
-  on('command.run', { command: 'omp' }, async ($, e) => {
+  on('command.run', { command: 'dgs' }, async ($, e) => {
     const [first = '', ...rest] = e.args.trim().split(/\s+/)
     if (first === 'advisor' && rest.length > 0) return { text: await advisorCommand($, rest.join(' ')) }
     const tab = TABS.find(t => t.id === first)?.id
     if (tab) await $.state.set(PANE_TAB, tab)
-    await $.ui.open({ id: PANE_ID, title: 'omp-port settings', focus: true, closeOnEscape: true })
-    return { text: 'omp-port settings opened.' }
+    await $.ui.open({ id: PANE_ID, title: 'dgs settings', focus: true, closeOnEscape: true })
+    return { text: 'dgs settings opened.' }
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE_ID }, async ($, e) => {
     if (e.surface === 'mobile') {
       const { Text } = $.ui.resolve(e)
-      return <Text>omp-port settings need a terminal or desktop session (pickers and inputs).</Text>
+      return <Text>dgs settings need a terminal or desktop session (pickers and inputs).</Text>
     }
     const { Box, Button, Input, Select, Text } = $.ui.resolve(e)
     const tab: Tab = (await $.state.get(PANE_TAB)).value ?? 'statusline'
@@ -843,6 +882,7 @@ export const register: Register = on => {
 
   on('turn.complete', async ($, e, next) => {
     if (e.agentId === undefined) {
+      await recordTurnDelta($).catch(() => {})
       $.clock.after(0, () => {
         refreshStatus($).catch(() => {})
       })

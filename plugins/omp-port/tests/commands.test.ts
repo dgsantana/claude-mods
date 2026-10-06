@@ -1,7 +1,7 @@
 import { expect, mock, test } from 'claude-code/testing'
 import { world } from './world'
 
-test('a refused command registration does not stop /omp from registering', async ($, on) => {
+test('a refused command registration does not stop /dgs from registering', async ($, on) => {
   world(on, {})
   mock.store(on, {})
   const registered: string[] = []
@@ -12,7 +12,7 @@ test('a refused command registration does not stop /omp from registering', async
   })
   on('session.start', ($, e) => ({ cwd: e.cwd }))
   await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true } as never)
-  expect(registered).toContain('omp')
+  expect(registered).toContain('dgs')
   expect(registered).not.toContain('advisor')
 })
 
@@ -24,9 +24,9 @@ test('the built-in /advisor is left alone (no omp-port hook answers it)', async 
   expect(r.text).toBe('engine ran /advisor')
 })
 
-test('/omp advisor <verb> runs the advisor commands', async ($, on) => {
+test('/dgs advisor <verb> runs the advisor commands', async ($, on) => {
   world(on, {})
   mock.store(on, {})
-  expect((await $.command.run({ command: 'omp', args: 'advisor on' } as never)).text).toMatch(/Advisor on/)
-  expect((await $.command.run({ command: 'omp', args: 'advisor status' } as never)).text).toMatch(/^Advisor on/)
+  expect((await $.command.run({ command: 'dgs', args: 'advisor on' } as never)).text).toMatch(/Advisor on/)
+  expect((await $.command.run({ command: 'dgs', args: 'advisor status' } as never)).text).toMatch(/^Advisor on/)
 })

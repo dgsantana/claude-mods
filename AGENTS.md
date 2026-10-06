@@ -11,7 +11,7 @@ plugin marketplace (`github.com/dgsantana/claude-mods`). See README.md for what 
 | `plugins/omp-port/` | The omp-port plugin (function-hook mod) |
 | `plugins/omp-port/hooks/register.tsx` | The one hooks module; every `$` call lives here |
 | `plugins/omp-port/hooks/*.ts` | Pure logic: frontmatter, paths, glob, layers, load, rule, rules, ttsr-match, advisor, agentsmd, settings-schema, statusline-config, status, config-patch, themes, pane-model |
-| `plugins/omp-port/hooks/settings-schema.ts` | The settings catalogue: defaults, validation, `/omp` pane rows and the README table all come from it |
+| `plugins/omp-port/hooks/settings-schema.ts` | The settings catalogue: defaults, validation, `/dgs` pane rows and the README table all come from it |
 | `plugins/omp-port/themes/builtin.json` | 102 status-line palettes generated from oh-my-pi by `scripts/vendor-themes.ts`. Don't edit; regenerate |
 | `plugins/omp-port/types/index.d.ts` | `$.state` contract (`PluginState['omp-port']`) |
 | `plugins/omp-port/builtin-rules/` | Rules vendored from oh-my-pi (MIT, see NOTICE). Don't edit; re-vendor |
@@ -59,7 +59,8 @@ All four must pass before a commit that touches `plugins/`.
 - Inline test plugins (`test(name, { plugins }, …)`) can't close over test-file variables.
 - `$.command.register` throws for a name a built-in owns (e.g. `/advisor`), and the test kit does
   not reproduce that. Register each command in its own try/catch, and never hook `command.run`
-  for a built-in's name. omp-port's commands live under `/omp`.
+  for a built-in's name. omp-port's commands live under `/dgs` (the owner's initials, a name no
+  built-in will claim).
 - `Select` takes 1–64 options. The test kit does not check this (or other paint-time limits):
   after changing a pane, open it in a real session (`tmux` + `claude --plugin-dir plugins/omp-port
   --debug-file <f>`) and grep the log for `does not validate`.
