@@ -10,7 +10,7 @@
 import type { EngineInterface, Register } from 'claude-code'
 import { isRecord } from './guards'
 import { type BoardPrompt, callKey, outcomeOf, ownArgs, promptOf } from './prompt'
-import { promptDelayMsOf } from './settings'
+import { promptDelayMsOf, promptingAllowedOf } from './settings'
 import { agentDirOf, boardHomeOf, settingsPathOf, snapshotPathOf, toSnapshot } from './snapshot'
 import { next as advance, permissionQuestion, type SessionEvent, type SessionState, startSession, type TaskStatus } from './state'
 
@@ -33,6 +33,8 @@ const offered = new Set<string>()
 const allowedByBoard = new Set<string>()
 /** The hub's per-run token; fetched on first use and again when the hub refuses it. */
 let hubToken: string | undefined
+/** Whether this session is asking the hub for a prompt written on the board (decision 0010). */
+let pickingUp = false
 const PLUGIN = 'agent-switchboard'
 
 /** Reported at most once a minute, to the debug log only: never into the conversation. */
@@ -71,6 +73,7 @@ async function begin($: EngineInterface, sessionId: string): Promise<SessionStat
     agentDir: agentDirOf(env),
     pid: 0,
     cost: usage.cost?.usd ?? 0,
+    startedAt: usage.startedAt,
     at: await $.clock.now(),
   })
   heartbeat ??= $.clock.every(HEARTBEAT_MS, () => {
@@ -87,6 +90,9 @@ async function beat($: EngineInterface): Promise<void> {
   const at = await $.clock.now()
   const usd = usage.cost?.usd
   await apply($, usd === undefined || usd === state.cost ? { type: 'heartbeat', at } : { type: 'cost_seen', usd, at })
+  $.clock.after(0, () => {
+    pickUpPrompts($).catch(() => {})
+  })
 }
 
 /** Moves the watched session on by one event and publishes it; never throws. */
@@ -131,13 +137,50 @@ async function boardHome($: EngineInterface): Promise<string | undefined> {
  * took from 1 to 10.6 s when measured (2026-10-06); no hook or call tells the two apart.
  */
 async function promptDelayMs($: EngineInterface): Promise<number> {
+  return promptDelayMsOf(await settingsText($))
+}
+
+/** The board's settings file as text, or nothing when it cannot be read. */
+async function settingsText($: EngineInterface): Promise<string | undefined> {
   const home = await boardHome($)
-  if (!home) return promptDelayMsOf(undefined)
+  if (!home) return undefined
   try {
     const text = await $.fs.read(settingsPathOf(home))
-    return promptDelayMsOf(typeof text === 'string' ? text : undefined)
+    return typeof text === 'string' ? text : undefined
   } catch {
-    return promptDelayMsOf(undefined)
+    return undefined
+  }
+}
+
+/**
+ * While the session is idle and the board may prompt it, asks the hub for the next prompt written on the
+ * board, in rounds under 30 s, and submits it as the person's words. Stops when a turn starts (the next
+ * `turn.complete` starts it again), when prompting is off, or on any failure; the heartbeat retries.
+ */
+async function pickUpPrompts($: EngineInterface): Promise<void> {
+  if (pickingUp) return
+  pickingUp = true
+  try {
+    while (session && !session.ended && session.phase === 'idle' && session.waiting.length === 0) {
+      if (!promptingAllowedOf(await settingsText($))) return
+      const asked = await $.clock.now()
+      const response = await $.http.fetch(await hubUrl($, `/api/sessions/${encodeURIComponent(session.sessionId)}/prompts/next`))
+      if (response.status === 204) {
+        // The hub holds a round for 25 s; an empty answer at once means it sees the session busy.
+        if ((await $.clock.now()) - asked < 1000) await $.clock.sleep(2000)
+        continue
+      }
+      if (response.status !== 200) return
+      const parsed: unknown = JSON.parse(response.text)
+      if (!isRecord(parsed) || typeof parsed.text !== 'string') return
+      // Held by Claude Code until the session is idle, should a turn have started meanwhile.
+      await $.prompt.submit({ text: parsed.text, asUser: true })
+      return
+    }
+  } catch (error) {
+    await report($, error)
+  } finally {
+    pickingUp = false
   }
 }
 
@@ -252,6 +295,9 @@ export const register: Register = on => {
       const when = await $.clock.now()
       if (usage.cost?.usd !== undefined) await apply($, { type: 'cost_seen', usd: usage.cost.usd, at: when })
       await apply($, { type: 'turn_ended', said: e.answer, at: when })
+      $.clock.after(0, () => {
+        pickUpPrompts($).catch(() => {})
+      })
     }
     return result
   }).catch(($, e, next) => next(e))

@@ -28,6 +28,7 @@ export interface SessionState {
   cwd: string
   agentDir: string
   pid: number
+  startedAt?: number
   phase: 'idle' | 'running'
   /** Everything waiting on the human, oldest first: tool calls can run concurrently. */
   waiting: Waiting[]
@@ -64,11 +65,13 @@ export interface SessionStart {
   pid: number
   /** Spend already recorded in the session when the mod started watching it. */
   cost: number
+  /** When the session began, as Claude Code counts it: its first launch for a resumed one. */
+  startedAt?: number
   at: number
 }
 
 export function startSession(start: SessionStart): SessionState {
-  return {
+  const state: SessionState = {
     sessionId: start.sessionId,
     cwd: start.cwd,
     agentDir: start.agentDir,
@@ -80,6 +83,8 @@ export function startSession(start: SessionStart): SessionState {
     lastActivityAt: start.at,
     heartbeatAt: start.at,
   }
+  if (start.startedAt !== undefined) state.startedAt = start.startedAt
+  return state
 }
 
 export function next(state: SessionState, event: SessionEvent): SessionState {

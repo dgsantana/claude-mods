@@ -25,6 +25,7 @@ restart. `SWITCHBOARD_HOME` moves the board's data folder, as it does for the hu
 | `state` | `running` from `turn.start` to the main loop's `turn.complete`; `waiting` while an `AskUserQuestion` call is open, or while a call whose permission check answered `ask` is still undecided after the board's prompt delay (`board.promptDelaySeconds` in its settings, default 10 s), until it is decided (the "run in background" line appears under a running Bash command) or resolves; `idle` otherwise. No hook tells a prompt on screen from auto mode's classifier, which took up to 10.6 s when measured, so a prompt reaches the board that much later, and a delay under about 10 s can show the classifier as a brief wait |
 | `openAsk` | The oldest open wait: an AskUserQuestion's first question and question count, or `Allow <tool>: <what>?` for a permission prompt |
 | `todo` | The task tools (`TaskCreate`, `TaskUpdate`) or a `TodoWrite` list |
+| `startedAt` | When the session began, from `$.session.usage().startedAt` (a resumed session's first launch) |
 | `lastSaid` | The end (400 characters) of the main loop's final answer of the latest turn that said something, from `turn.complete`; no model call |
 | `cost` | `$.session.usage().cost.usd`, after each turn and on each heartbeat |
 | `heartbeatAt` | Every 15 seconds; the board shows a session as stalled after 60 seconds without one |
@@ -43,6 +44,14 @@ Each open permission prompt and AskUserQuestion is also offered to the board's h
 deny, deny with a note, or the question's answers. Whichever answers first gives the call its result; the
 terminal dialog closes by itself. "Allow once" runs the call again as this plugin's own, and its
 permission check allows that one call unless a rule denies it outright. With no hub, nothing changes.
+
+## Prompting from the board
+
+With the board's setting "Allow prompting sessions from the board" on (off by default), a prompt written on
+the board waits in the hub's queue; while its session is idle, the mod takes the oldest one and submits it
+with `$.prompt.submit({ text, asUser: true })`, so the model reads it as the person's words and the terminal
+labels it as sent from the plugin. The mod asks only while the session is idle, and not at all while the
+setting is off.
 
 ## Failure
 

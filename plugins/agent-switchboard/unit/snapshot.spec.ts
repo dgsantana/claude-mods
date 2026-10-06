@@ -90,3 +90,14 @@ describe('what the session last said, in the snapshot', () => {
     expect(toSnapshot(start()).lastSaid).toBeUndefined()
   })
 })
+
+describe('when the session started, in the snapshot', () => {
+  test('is published when known', () => {
+    const started = startSession({ sessionId: 's1', cwd: '/repo', agentDir: '/a', pid: 0, cost: 0, startedAt: T0 - 60_000, at: T0 })
+    expect(toSnapshot(started).startedAt).toBe('2026-10-06T09:59:00.000Z')
+  })
+
+  test('absent when not known', () => {
+    expect(toSnapshot(start()).startedAt).toBeUndefined()
+  })
+})

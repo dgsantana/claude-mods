@@ -17,6 +17,8 @@ export interface Snapshot {
   cwd: string
   agentDir: string
   pid: number
+  /** When the session began, when known. */
+  startedAt?: string
   state: 'idle' | 'running' | 'waiting'
   lastActivityAt: string
   heartbeatAt: string
@@ -43,6 +45,7 @@ export function toSnapshot(state: SessionState): Snapshot {
     heartbeatAt: iso(state.heartbeatAt),
     cost: state.cost,
   }
+  if (state.startedAt !== undefined) snapshot.startedAt = iso(state.startedAt)
   if (oldest) snapshot.openAsk = { question: cut(oldest.question, LIMITS.question), count: oldest.count, since: iso(oldest.since) }
   if (state.todo) {
     const todo: NonNullable<Snapshot['todo']> = { closed: state.todo.closed, total: state.todo.total }

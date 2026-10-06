@@ -11,7 +11,7 @@ function world(on: On, env: Record<string, string> = { HOME: '/home/u' }) {
   mock.env(on, env)
   on('session.id', () => ({ value: fake.id }))
   on('session.cwd', () => ({ value: '/repo' }))
-  on('session.usage', () => ({ value: { startedAt: 0, context: { window: 200_000 }, rateLimits: [], cost: { usd: fake.usd } } as never }))
+  on('session.usage', () => ({ value: { startedAt: Date.UTC(2026, 9, 6, 8, 0, 0), context: { window: 200_000 }, rateLimits: [], cost: { usd: fake.usd } } as never }))
   on('fs.write', ($, e) => {
     if (fake.failWrites) return { deny: 'EACCES' }
     fake.files.set(e.path.replace(/\\/g, '/').replace(/^[A-Za-z]:/, ''), e.text)
@@ -239,3 +239,10 @@ test("what the session last said: the main loop's answer, never a subagent's", a
   await $.turn.complete({ ...DONE, answer: 'All tests pass now.' })
   expect(w.snapshot().lastSaid).toMatchObject({ text: 'All tests pass now.' })
 })
+
+test('the snapshot says when the session started, as Claude Code counts it', async ($, on) => {
+  const w = world(on)
+  await $.session.start(START)
+  expect(w.snapshot().startedAt).toBe('2026-10-06T08:00:00.000Z')
+})
+
