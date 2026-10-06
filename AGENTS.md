@@ -17,6 +17,9 @@ plugin marketplace (`github.com/dgsantana/claude-mods`). See README.md for what 
 | `plugins/omp-port/builtin-rules/` | Rules vendored from oh-my-pi (MIT, see NOTICE). Don't edit; re-vendor |
 | `plugins/omp-port/unit/*.spec.ts` | Unit tests for pure modules (`bun test`) |
 | `plugins/omp-port/tests/*.test.ts` | Engine tests (`claude plugin test`); `tests/world.ts` fakes fs/session/env |
+| `plugins/omp-board/` | The omp-board plugin: publishes each session's state as an omp-board snapshot file |
+| `plugins/omp-board/hooks/register.ts` | Its hooks module; every `$` call lives here |
+| `plugins/omp-board/hooks/state.ts`, `snapshot.ts` | Pure logic: the session state machine, and snapshot format v1 with its location |
 | `scripts/` | `vendor-themes.ts` (regenerate themes from an omp checkout), `settings-table.ts --write` (README table) |
 | `examples/.agents/` | Sample layered config, APPEND_SYSTEM, rules and a custom theme |
 | `docs/superpowers/` | Specs and implementation plans |
@@ -31,7 +34,9 @@ cd plugins/omp-port && bunx -p typescript@5.9 tsc -p . --noEmit   # type-check (
 claude --plugin-dir plugins/omp-port        # try it in a session
 ```
 
-All four must pass before a commit that touches `plugins/`.
+The same four with `plugins/omp-board` for that plugin. All must pass before a commit that
+touches `plugins/`. The snapshot format omp-board reads is specified in the omp-board repository
+(`docs/reference/snapshot-format.md`); change it there first.
 
 ## Hard constraints (enforced by the engine, not style)
 

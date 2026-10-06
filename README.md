@@ -1,8 +1,12 @@
 # claude-mods
 
-Claude Code mods, shared between workstations. Currently one plugin, **omp-port**, which brings
-a handful of [oh-my-pi](https://github.com/can1357/oh-my-pi) (omp) features to Claude Code,
-including omp's nerd-font status line, drawn in the band above the prompt.
+Claude Code mods, shared between workstations. Two plugins:
+
+- **omp-port** brings a handful of [oh-my-pi](https://github.com/can1357/oh-my-pi) (omp) features
+  to Claude Code, including omp's nerd-font status line, drawn in the band above the prompt.
+  Described below.
+- **omp-board** puts Claude Code sessions on omp-board, a local board for working across many
+  agent sessions at once. See [plugins/omp-board/README.md](plugins/omp-board/README.md).
 
 | Feature | What it does |
 |---|---|
@@ -198,6 +202,9 @@ claude plugin test plugins/omp-port         # hooks against the engine
 claude plugin validate . && claude plugin validate plugins/omp-port
 claude --plugin-dir plugins/omp-port        # try it in a session
 ```
+
+The same commands with `plugins/omp-board` cover the second plugin; `bun run test:unit`,
+`bun run test:plugin` and `bun run validate` run both.
 
 All engine calls (`$`) live in `plugins/omp-port/hooks/register.tsx`: the engine only follows
 `$` into functions declared in the hooks module itself. Everything else is pure and imported.
