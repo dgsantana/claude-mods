@@ -44,7 +44,8 @@ export type SessionEvent =
   | { type: 'turn_started'; at: number }
   | { type: 'turn_ended'; at: number }
   | { type: 'ask_opened'; toolUseId: string; questions: string[]; at: number }
-  | { type: 'permission_asked'; toolUseId: string; question: string; at: number }
+  /** `since`: when the prompt opened, when it is known only later; `at` otherwise. */
+  | { type: 'permission_asked'; toolUseId: string; question: string; since?: number; at: number }
   | { type: 'permission_decided'; toolUseId: string; at: number }
   | { type: 'tool_finished'; toolUseId: string; at: number }
   | { type: 'task_created'; id: string; subject: string; at: number }
@@ -103,7 +104,7 @@ export function next(state: SessionState, event: SessionEvent): SessionState {
     case 'permission_asked':
       // AskUserQuestion is itself put to the permission check; its question says more.
       if (state.waiting.some(w => w.toolUseId === event.toolUseId)) return active
-      return { ...active, waiting: [...state.waiting, { toolUseId: event.toolUseId, question: event.question, count: 1, since: event.at }] }
+      return { ...active, waiting: [...state.waiting, { toolUseId: event.toolUseId, question: event.question, count: 1, since: event.since ?? event.at }] }
     case 'permission_decided':
     case 'tool_finished':
       return { ...active, waiting: state.waiting.filter(w => w.toolUseId !== event.toolUseId) }

@@ -189,11 +189,12 @@ export const register: Register = on => {
     if (verdict.decision === 'ask' && e.agentId === undefined && id !== undefined) {
       undecided.add(id)
       const question = permissionQuestion(e.tool, e.input)
+      const since = await $.clock.now()
       $.clock.after(PROMPT_AFTER_MS, () => {
         if (!undecided.has(id)) return
         $.clock
           .now()
-          .then(at => apply($, { type: 'permission_asked', toolUseId: id, question, at }))
+          .then(at => apply($, { type: 'permission_asked', toolUseId: id, question, since, at }))
           .catch(error => report($, error))
       })
     }

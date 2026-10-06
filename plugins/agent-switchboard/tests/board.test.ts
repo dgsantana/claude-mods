@@ -96,10 +96,13 @@ async function openCall($: Engine, on: On, w: ReturnType<typeof world>, agentId?
 test('a call still undecided 15 seconds after its check answered ask is a prompt waiting on the human', async ($, on) => {
   const w = world(on)
   const finish = await openCall($, on, w)
+  const askedAt = w.clock.now()
   await w.clock.advance(14_900)
   expect(w.snapshot().state).toBe('running')
   await w.clock.advance(200)
   expect(w.snapshot()).toMatchObject({ state: 'waiting', openAsk: { question: 'Allow Bash: git push?', count: 1 } })
+  // Asked when the prompt opened, not when the board learned of it.
+  expect(Date.parse(w.snapshot().openAsk.since)).toBe(askedAt)
   await finish()
   expect(w.snapshot().state).toBe('running')
 })
