@@ -3,6 +3,7 @@
 // is bounded, so a file stays small however long the session runs. `tool` marks the file as this mod's;
 // the hub reads omp's own files only for snapshots without it.
 
+import { isRecord } from './guards'
 import type { SessionState } from './state'
 
 export const SNAPSHOT_FORMAT_VERSION = 1
@@ -94,6 +95,27 @@ export function saidPathOf(boardHome: string, sessionId: string): string | undef
 
 export function saidTextOf(text: string): string {
   return text.length <= MAX_SAID_CHARS ? text : `…${text.slice(text.length - MAX_SAID_CHARS + 1)}`
+}
+
+/** How many turn conclusions the history beside the snapshot keeps (increment 011). */
+export const MAX_TURNS = 50
+
+/** Where a session's turn history goes: `said/<sessionId>.turns.json` in the board folder. */
+export function turnsPathOf(boardHome: string, sessionId: string): string | undefined {
+  if (!SAFE_ID.test(sessionId) || sessionId.includes('..')) return undefined
+  return join(boardHome, 'said', `${sessionId}.turns.json`)
+}
+
+/** The history with one more turn, oldest first, the last `MAX_TURNS` kept; a missing or broken file starts afresh. */
+export function withTurn(existing: string | undefined, turn: { at: string; text: string }): string {
+  let turns: unknown = []
+  try {
+    turns = existing === undefined ? [] : JSON.parse(existing)
+  } catch {
+    turns = []
+  }
+  const kept = Array.isArray(turns) ? turns.filter(t => isRecord(t) && typeof t.at === 'string' && typeof t.text === 'string') : []
+  return JSON.stringify([...kept, turn].slice(-MAX_TURNS))
 }
 
 /** The board's settings file, which the hub owns; this mod only reads it. */

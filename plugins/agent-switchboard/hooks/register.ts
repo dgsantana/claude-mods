@@ -11,7 +11,7 @@ import type { EngineInterface, Register } from 'claude-code'
 import { isRecord } from './guards'
 import { type BoardPrompt, callKey, outcomeOf, ownArgs, promptOf } from './prompt'
 import { promptDelayMsOf, promptingAllowedOf } from './settings'
-import { agentDirOf, boardHomeOf, saidPathOf, saidTextOf, settingsPathOf, snapshotPathOf, toSnapshot } from './snapshot'
+import { agentDirOf, boardHomeOf, saidPathOf, saidTextOf, settingsPathOf, snapshotPathOf, toSnapshot, turnsPathOf, withTurn } from './snapshot'
 import { next as advance, permissionQuestion, type SessionEvent, type SessionState, startSession, type TaskStatus } from './state'
 
 const HEARTBEAT_MS = 15_000
@@ -128,6 +128,26 @@ async function publishSaid($: EngineInterface, sessionId: string, text: string):
   const path = home && saidPathOf(home, sessionId)
   if (!path) return
   const write = writes.then(() => $.fs.write(path, saidTextOf(text)))
+  writes = write.catch(() => {})
+  await write
+}
+
+/** Adds a turn's conclusion to the session's history, for the project page's timeline (increment 011). */
+async function appendTurn($: EngineInterface, state: SessionState): Promise<void> {
+  const home = await boardHome($)
+  const path = home && turnsPathOf(home, state.sessionId)
+  const turn = toSnapshot(state).lastSaid
+  if (!path || !turn) return
+  const write = writes.then(async () => {
+    let existing: string | undefined
+    try {
+      const read = await $.fs.read(path)
+      existing = typeof read === 'string' ? read : undefined
+    } catch {
+      existing = undefined
+    }
+    await $.fs.write(path, withTurn(existing, turn))
+  })
   writes = write.catch(() => {})
   await write
 }
@@ -305,7 +325,10 @@ export const register: Register = on => {
       const when = await $.clock.now()
       if (usage.cost?.usd !== undefined) await apply($, { type: 'cost_seen', usd: usage.cost.usd, at: when })
       await apply($, { type: 'turn_ended', said: e.answer, at: when })
-      if (session && e.answer.trim() !== '') await publishSaid($, session.sessionId, e.answer.trim()).catch(error => report($, error))
+      if (session && e.answer.trim() !== '') {
+        await publishSaid($, session.sessionId, e.answer.trim()).catch(error => report($, error))
+        await appendTurn($, session).catch(error => report($, error))
+      }
       $.clock.after(0, () => {
         pickUpPrompts($).catch(() => {})
       })

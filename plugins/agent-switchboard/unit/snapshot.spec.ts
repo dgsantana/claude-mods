@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { agentDirOf, boardHomeOf, MAX_SAID_CHARS, saidPathOf, saidTextOf, snapshotPathOf, toSnapshot } from '../hooks/snapshot'
+import { agentDirOf, boardHomeOf, MAX_SAID_CHARS, MAX_TURNS, saidPathOf, saidTextOf, snapshotPathOf, toSnapshot, turnsPathOf, withTurn } from '../hooks/snapshot'
 import { next, startSession } from '../hooks/state'
 
 const T0 = Date.UTC(2026, 9, 6, 10, 0, 0)
@@ -115,5 +115,26 @@ describe('the full last answer, beside the snapshot', () => {
     expect(long).toHaveLength(MAX_SAID_CHARS)
     expect(long.startsWith('…')).toBe(true)
     expect(long.endsWith('THE END')).toBe(true)
+  })
+})
+
+describe('the turn history beside the snapshot', () => {
+  test('goes to said/<session>.turns.json, only for a safe id', () => {
+    expect(turnsPathOf('/home/u/.agent-switchboard', 'abc-1')).toBe('/home/u/.agent-switchboard/said/abc-1.turns.json')
+    expect(turnsPathOf('/b', '../x')).toBeUndefined()
+  })
+
+  test('appends each turn, oldest first, keeping the last 50', () => {
+    let text: string | undefined
+    for (let i = 1; i <= 52; i++) text = withTurn(text, { at: '2026-10-06T10:00:00.000Z', text: `turn ${i}` })
+    const turns = JSON.parse(text ?? '[]') as Array<{ text: string }>
+    expect(turns).toHaveLength(MAX_TURNS)
+    expect(turns[0]?.text).toBe('turn 3')
+    expect(turns.at(-1)?.text).toBe('turn 52')
+  })
+
+  test('a missing or broken file starts afresh', () => {
+    expect(JSON.parse(withTurn('{ broken', { at: 'x', text: 'first' }))).toEqual([{ at: 'x', text: 'first' }])
+    expect(JSON.parse(withTurn(undefined, { at: 'x', text: 'first' }))).toEqual([{ at: 'x', text: 'first' }])
   })
 })

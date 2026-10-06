@@ -17,11 +17,12 @@ function world(on: On, env: Record<string, string> = { HOME: '/home/u' }) {
     fake.files.set(e.path.replace(/\\/g, '/').replace(/^[A-Za-z]:/, ''), e.text)
     return { value: undefined }
   })
-  on('fs.read', ($, e) =>
-    fake.settings !== undefined && e.path.replace(/\\/g, '/').endsWith('/.agent-switchboard/settings.json')
-      ? { value: fake.settings }
-      : { deny: `ENOENT ${e.path}` },
-  )
+  on('fs.read', ($, e) => {
+    const path = e.path.replace(/\\/g, '/').replace(/^[A-Za-z]:/, '')
+    if (fake.settings !== undefined && path.endsWith('/.agent-switchboard/settings.json')) return { value: fake.settings }
+    const written = fake.files.get(path)
+    return written === undefined ? { deny: `ENOENT ${e.path}` } : { value: written }
+  })
   on('session.start', ($, e) => ({ cwd: e.cwd }))
   on('session.end', ($, e) => ({ sessionId: e.sessionId }))
   on('turn.start', ($, e) => ({ turnId: e.turnId }) as never)
@@ -253,4 +254,15 @@ test("the main loop's full answer goes beside the snapshot, for the project page
   await $.turn.start({ text: 'go', turnId: 't' } as never)
   await $.turn.complete({ ...DONE, answer: '**Done.**\n\n- one\n- two' })
   expect(w.fake.files.get('/home/u/.agent-switchboard/said/sess-1.md')).toBe('**Done.**\n\n- one\n- two')
+})
+
+test("each main turn that said something joins the session's turn history; a subagent's does not", async ($, on) => {
+  const w = world(on)
+  await $.session.start(START)
+  await $.turn.start({ text: 'go', turnId: 't' } as never)
+  await $.turn.complete({ ...DONE, answer: 'Subagent chatter', agentId: 'sub' } as never)
+  await $.turn.complete({ ...DONE, answer: 'First conclusion.' })
+  await $.turn.complete({ ...DONE, answer: 'Second conclusion.' })
+  const turns = JSON.parse(w.fake.files.get('/home/u/.agent-switchboard/said/sess-1.turns.json') ?? '[]') as Array<{ text: string }>
+  expect(turns.map(t => t.text)).toEqual(['First conclusion.', 'Second conclusion.'])
 })
