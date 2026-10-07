@@ -9,7 +9,7 @@
 
 import type { EngineInterface, Register } from 'claude-code'
 import { activityOf } from './activity'
-import { BOARD_TOOL_CALLS, BOARD_TOOLS, type BoardToolName, boardListText, boardToolOf, tagOutcomeText } from './board'
+import { BOARD_TOOL_CALLS, BOARD_TOOLS, type BoardToolName, boardListText, boardToolOf, docLinksLine, tagOutcomeText } from './board'
 import { editedPathOf, type Edit, withEdit } from './edits'
 import { isRecord } from './guards'
 import { type Message, receivedOf, withMessage } from './messages'
@@ -307,21 +307,29 @@ async function runBoardTool($: EngineInterface, tool: BoardToolName, args: Recor
     const list = await $.http.fetch(await hubUrl($, '/api/boards'))
     return list.status === 200 ? boardListText(list.text) : `Could not list the boards: ${list.status} ${list.text}`
   }
-  let board = typeof args.board === 'string' && args.board !== '' ? args.board : undefined
-  let project: string | undefined
-  if (!board) {
-    const found = await $.http.fetch(await hubUrl($, `/api/board-for?cwd=${encodeURIComponent(await $.session.cwd())}`))
-    if (found.status !== 200) return `No board for this folder: ${found.text}. Name one from board_list.`
-    const parsed: unknown = JSON.parse(found.text)
-    if (!isRecord(parsed) || typeof parsed.id !== 'string') return 'The hub did not name a board for this folder.'
-    board = parsed.id
-    if (typeof parsed.project === 'string') project = parsed.project
-  }
-  const where = `/api/boards/${encodeURIComponent(board)}`
-  const outline = `${where}/outline${project ? `?project=${encodeURIComponent(project)}` : ''}`
-  if (tool === 'board_read') return readBoard($, board, outline)
   const state = await current($)
   const author = { kind: 'session', sessionId: state?.sessionId ?? 'unknown', tool: 'claude-code' }
+  if (tool === 'board_create') {
+    const created = await hubSend($, 'POST', '/api/boards', { title: args.title, author })
+    if (created.status !== 200) return `Not created: ${created.status} ${created.text}`
+    const parsed: unknown = JSON.parse(created.text)
+    return isRecord(parsed) && typeof parsed.id === 'string' ? `Created board ${parsed.id}, "${String(parsed.title ?? args.title)}".` : 'The hub did not name the new board.'
+  }
+  // This session's project board, and the project the hub knows its folder by (the main worktree).
+  const found = await $.http.fetch(await hubUrl($, `/api/board-for?cwd=${encodeURIComponent(await $.session.cwd())}`))
+  const own: unknown = found.status === 200 ? JSON.parse(found.text) : undefined
+  const ownProject = isRecord(own) && typeof own.project === 'string' ? own.project : undefined
+  let board = typeof args.board === 'string' && args.board !== '' ? args.board : undefined
+  if (!board) {
+    if (found.status !== 200) return `No board for this folder: ${found.text}. Name one from board_list.`
+    if (!isRecord(own) || typeof own.id !== 'string') return 'The hub did not name a board for this folder.'
+    board = own.id
+  }
+  // The project goes with reads and writes of its own board only, as before; doc links are this project's on any board.
+  const project = isRecord(own) && board === own.id ? ownProject : undefined
+  const where = `/api/boards/${encodeURIComponent(board)}`
+  const outline = `${where}/outline${project ? `?project=${encodeURIComponent(project)}` : ''}`
+  if (tool === 'board_read') return `${await readBoard($, board, outline)}${ownProject ? `\n\n${docLinksLine(ownProject)}` : ''}`
   const ops = tool === 'board_comment' ? [{ op: 'comment', id: args.block, text: args.text }] : args.ops
   const notify = tool === 'board_comment' && Array.isArray(args.notify) ? args.notify : undefined
   const answer = await hubSend($, 'POST', `${where}/ops`, { ops, author, ...(project ? { project } : {}), ...(notify?.length ? { notify } : {}) })

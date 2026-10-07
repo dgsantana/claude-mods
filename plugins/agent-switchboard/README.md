@@ -102,13 +102,23 @@ and text that looks like a slash command is passed on as words.
 
 ## Whiteboards
 
-Since 0.9.0 the mod gives the model four tools for the board's shared whiteboards (decision 0014 in the
+Since 0.9.0 the mod gives the model tools for the board's shared whiteboards (decision 0014 in the
 agent-switchboard repository), registered at `session.start`: `board_list`, `board_read` (a board as text,
 blocks with ids, kinds, authors, positions, comments and arrows), `board_write` (operations: add, update,
-move and remove blocks, add and remove arrows) and `board_comment`. Without a board named, they use the
-board of the session's project, which the hub finds from the session's folder. Each is a call to the hub;
+move and remove blocks, add and remove arrows), `board_comment` and, since 0.9.4, `board_create` (a
+shared board for work across projects). Without a board named, they use the board of the session's project, which the hub finds from the session's folder. Each is a call to the hub;
 writes carry this session as their author. The hub checks every operation and refuses a batch whole, with
 its reason, which the model reads as the tool's result.
+
+Since 0.9.4 a link block can show a markdown doc of the project, kept current: its href is
+`#/project/<key>/doc/<path>`. `board_read` ends with this project's prefix already encoded (`key` is the
+project folder the hub knows, the main worktree for a linked worktree), so the model copies it and appends
+the doc's path with `/` separators instead of encoding a Windows path by hand. The hub serves only
+markdown that git tracks, or untracked and not ignored.
+
+The plugin also ships a skill, `agent-switchboard:whiteboard` (`skills/whiteboard/SKILL.md`): short
+guidance on when a board helps, which block for what, placement, arrows, comments and tags, and leaving
+the user's blocks alone. Each tool description points to it; it costs no context until loaded.
 
 ## Failure
 
@@ -127,5 +137,6 @@ again on its next refresh.
 | `hooks/prompt.ts` | What the mod offers the hub about an open prompt, and what the hub's answer does to the call |
 | `hooks/settings.ts` | The values read from the board's `settings.json`, validated as the hub does |
 | `hooks/guards.ts` | Shared type guard |
+| `skills/whiteboard/SKILL.md` | The whiteboard skill the tool descriptions point to |
 | `unit/*.spec.ts` | Unit tests for the pure modules (`bun test plugins/agent-switchboard/unit`) |
 | `tests/*.test.ts` | Hooks against the engine (`claude plugin test plugins/agent-switchboard`) |

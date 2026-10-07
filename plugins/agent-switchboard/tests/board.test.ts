@@ -322,15 +322,38 @@ test('the whiteboard tools are registered at start; with no board named they use
     return reply('{}')
   })
   await $.session.start(START)
-  expect(registered).toEqual(['board_list', 'board_read', 'board_write', 'board_comment'])
+  expect(registered).toEqual(['board_list', 'board_read', 'board_write', 'board_comment', 'board_create'])
 
   const read = await $.tool.call({ tool: 'mcp__agent-switchboard__board_read' } as never)
-  expect(read).toMatchObject({ result: 'Board "repo", revision 1, 1 blocks' })
+  expect(read).toMatchObject({ result: 'Board "repo", revision 1, 1 blocks\n\nDoc links for this project: `#/project/%2Frepo/doc/` followed by the doc\'s path relative to the project, with / separators, as is.' })
   expect(requests.some(r => r.url.includes('/api/board-for?cwd=%2Frepo'))).toBe(true)
+
+  // A board named outright still gets this project's doc links, from the project's own board.
+  const named = await $.tool.call({ tool: 'mcp__agent-switchboard__board_read', board: 's-00000002' } as never)
+  expect(named).toMatchObject({ result: expect.stringContaining('`#/project/%2Frepo/doc/`') })
 
   await $.tool.call({ tool: 'mcp__agent-switchboard__board_write', ops: [{ op: 'addBlock', block: { kind: 'note', text: 'hi' } }] } as never)
   const write = requests.find(r => r.method === 'POST' && r.url.endsWith('/api/boards/p-00000001/ops'))
   expect(write?.body).toMatchObject({ project: '/repo', author: { kind: 'session', sessionId: 'sess-1', tool: 'claude-code' } })
+})
+
+test('board_create starts a shared board with the title, the session as its author', async ($, on) => {
+  world(on)
+  on('tool.register', ($, e) => ({ value: { tool: `mcp__agent-switchboard__${e.name}` } }))
+  const requests: Array<{ url: string; method: string; body?: unknown }> = []
+  on('http.fetch', ($, e) => {
+    const body = typeof e.init?.body === 'string' ? { body: JSON.parse(e.init.body) as unknown } : {}
+    requests.push({ url: e.url, method: e.init?.method ?? 'GET', ...body })
+    const reply = (text: string) => ({ value: { status: 200, ok: true, headers: {}, text } })
+    if (e.url.endsWith('/api/token')) return reply(JSON.stringify({ token: 't' }))
+    if (e.url.endsWith('/api/boards')) return reply(JSON.stringify({ id: 's-0000abcd', title: 'Release week' }))
+    return reply('{}')
+  })
+  await $.session.start(START)
+  const created = await $.tool.call({ tool: 'mcp__agent-switchboard__board_create', title: 'Release week' } as never)
+  const post = requests.find(r => r.method === 'POST' && r.url.endsWith('/api/boards'))
+  expect(post?.body).toEqual({ title: 'Release week', author: { kind: 'session', sessionId: 'sess-1', tool: 'claude-code' } })
+  expect(created).toMatchObject({ result: 'Created board s-0000abcd, "Release week".' })
 })
 
 test("the snapshot says what the session's latest tool call is doing, and keeps it once idle; a subagent's leaves it", async ($, on) => {
