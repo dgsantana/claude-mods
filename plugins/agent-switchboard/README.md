@@ -91,7 +91,18 @@ With the board's setting "Allow prompting sessions from the board" on (off by de
 the board waits in the hub's queue; while its session is idle, the mod takes the oldest one and submits it
 with `$.prompt.submit({ text, asUser: true })`, so the model reads it as the person's words and the terminal
 labels it as sent from the plugin. The mod asks only while the session is idle, and not at all while the
-setting is off.
+setting is off. A prompt that is one of the session's slash commands (`/reload-plugins`) runs as that
+command through `$.command.run` instead (since 0.7.0).
+
+## Whiteboards
+
+Since 0.9.0 the mod gives the model four tools for the board's shared whiteboards (decision 0014 in the
+agent-switchboard repository), registered at `session.start`: `board_list`, `board_read` (a board as text,
+blocks with ids, kinds, authors, positions, comments and arrows), `board_write` (operations: add, update,
+move and remove blocks, add and remove arrows) and `board_comment`. Without a board named, they use the
+board of the session's project, which the hub finds from the session's folder. Each is a call to the hub;
+writes carry this session as their author. The hub checks every operation and refuses a batch whole, with
+its reason, which the model reads as the tool's result.
 
 ## Failure
 

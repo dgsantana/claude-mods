@@ -303,3 +303,32 @@ test("a successful edit, a subagent's included, is recorded with its file; a rea
   const edits = JSON.parse(w.fake.files.get('/home/u/.agent-switchboard/said/sess-1.edits.json') ?? '[]') as Array<{ path: string }>
   expect(edits.map(e => e.path)).toEqual(['/repo/src/a.ts', '/repo/src/b.ts'])
 })
+
+test('the whiteboard tools are registered at start; with no board named they use the project board, and writes name the session', async ($, on) => {
+  world(on)
+  const registered: string[] = []
+  on('tool.register', ($, e) => {
+    registered.push(e.name)
+    return { value: { tool: `mcp__agent-switchboard__${e.name}` } }
+  })
+  const requests: Array<{ url: string; method: string; body?: unknown }> = []
+  on('http.fetch', ($, e) => {
+    const body = typeof e.init?.body === 'string' ? { body: JSON.parse(e.init.body) as unknown } : {}
+    requests.push({ url: e.url, method: e.init?.method ?? 'GET', ...body })
+    const reply = (text: string) => ({ value: { status: 200, ok: true, headers: {}, text } })
+    if (e.url.endsWith('/api/token')) return reply(JSON.stringify({ token: 't' }))
+    if (e.url.includes('/api/board-for')) return reply(JSON.stringify({ id: 'p-00000001', project: '/repo' }))
+    if (e.url.includes('/outline')) return reply('Board "repo", revision 1, 1 blocks')
+    return reply('{}')
+  })
+  await $.session.start(START)
+  expect(registered).toEqual(['board_list', 'board_read', 'board_write', 'board_comment'])
+
+  const read = await $.tool.call({ tool: 'mcp__agent-switchboard__board_read' } as never)
+  expect(read).toMatchObject({ result: 'Board "repo", revision 1, 1 blocks' })
+  expect(requests.some(r => r.url.includes('/api/board-for?cwd=%2Frepo'))).toBe(true)
+
+  await $.tool.call({ tool: 'mcp__agent-switchboard__board_write', ops: [{ op: 'addBlock', block: { kind: 'note', text: 'hi' } }] } as never)
+  const write = requests.find(r => r.method === 'POST' && r.url.endsWith('/api/boards/p-00000001/ops'))
+  expect(write?.body).toMatchObject({ project: '/repo', author: { kind: 'session', sessionId: 'sess-1', tool: 'claude-code' } })
+})

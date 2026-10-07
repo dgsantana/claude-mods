@@ -8,6 +8,7 @@
 // an update, never the session its work.
 
 import type { EngineInterface, Register } from 'claude-code'
+import { BOARD_TOOL_CALLS, BOARD_TOOLS, type BoardToolName, boardListText, boardToolOf } from './board'
 import { editedPathOf, type Edit, withEdit } from './edits'
 import { isRecord } from './guards'
 import { type Message, receivedOf, withMessage } from './messages'
@@ -268,6 +269,11 @@ async function hubUrl($: EngineInterface, path: string): Promise<string> {
 
 /** A request to the hub that changes something: it carries the token, fetched again once if refused. */
 async function hubWrite($: EngineInterface, method: 'POST' | 'DELETE', path: string, body?: unknown): Promise<number> {
+  return (await hubSend($, method, path, body)).status
+}
+
+/** The same, with the hub's answer: the whiteboard tools return it to the model. */
+async function hubSend($: EngineInterface, method: 'POST' | 'DELETE', path: string, body?: unknown): Promise<{ status: number; text: string }> {
   for (let attempt = 0; attempt < 2; attempt++) {
     if (hubToken === undefined || attempt > 0) {
       const answer = await $.http.fetch(await hubUrl($, '/api/token'))
@@ -280,9 +286,46 @@ async function hubWrite($: EngineInterface, method: 'POST' | 'DELETE', path: str
     }
     if (body !== undefined) init.body = JSON.stringify(body)
     const response = await $.http.fetch(await hubUrl($, path), init)
-    if (response.status !== 403) return response.status
+    if (response.status !== 403) return { status: response.status, text: response.text }
   }
-  return 403
+  return { status: 403, text: 'the hub refused this session its token' }
+}
+
+/**
+ * Runs one whiteboard tool against the hub (decision 0014): the board named, else this session's project
+ * board; writes carry this session as their author. A failure is returned as text the model can act on.
+ */
+async function runBoardTool($: EngineInterface, tool: BoardToolName, args: Record<string, unknown>): Promise<string> {
+  if (tool === 'board_list') {
+    const list = await $.http.fetch(await hubUrl($, '/api/boards'))
+    return list.status === 200 ? boardListText(list.text) : `Could not list the boards: ${list.status} ${list.text}`
+  }
+  let board = typeof args.board === 'string' && args.board !== '' ? args.board : undefined
+  let project: string | undefined
+  if (!board) {
+    const found = await $.http.fetch(await hubUrl($, `/api/board-for?cwd=${encodeURIComponent(await $.session.cwd())}`))
+    if (found.status !== 200) return `No board for this folder: ${found.text}. Name one from board_list.`
+    const parsed: unknown = JSON.parse(found.text)
+    if (!isRecord(parsed) || typeof parsed.id !== 'string') return 'The hub did not name a board for this folder.'
+    board = parsed.id
+    if (typeof parsed.project === 'string') project = parsed.project
+  }
+  const where = `/api/boards/${encodeURIComponent(board)}`
+  const outline = `${where}/outline${project ? `?project=${encodeURIComponent(project)}` : ''}`
+  if (tool === 'board_read') return readBoard($, board, outline)
+  const state = await current($)
+  const author = { kind: 'session', sessionId: state?.sessionId ?? 'unknown', tool: 'claude-code' }
+  const ops = tool === 'board_comment' ? [{ op: 'comment', id: args.block, text: args.text }] : args.ops
+  const answer = await hubSend($, 'POST', `${where}/ops`, { ops, author, ...(project ? { project } : {}) })
+  if (answer.status !== 200) return `Not applied: ${answer.text}`
+  if (tool === 'board_comment') return 'Commented.'
+  return `Applied. The board now:\n\n${await readBoard($, board, outline)}`
+}
+
+/** A board as text; a failed read says so, rather than handing an error page to the model as the board. */
+async function readBoard($: EngineInterface, board: string, outlinePath: string): Promise<string> {
+  const read = await $.http.fetch(await hubUrl($, outlinePath))
+  return read.status === 200 ? read.text : `Could not read board ${board}: ${read.status} ${read.text}`
 }
 
 /**
@@ -357,7 +400,19 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const started = await next(e)
     await current($).catch(error => report($, error))
+    // The whiteboard tools (decision 0014); session.start fires again on a reload, which registers them anew.
+    for (const tool of BOARD_TOOLS) await $.tool.register({ ...tool, inputSchema: { ...tool.inputSchema } }).catch(error => report($, error))
     return started
+  }).catch(($, e, next) => next(e))
+
+  on('tool.call', { tool: BOARD_TOOL_CALLS }, async ($, e, next) => {
+    const tool = boardToolOf(e.tool)
+    if (!tool) return next(e)
+    try {
+      return { result: await runBoardTool($, tool, ownArgs(e)) }
+    } catch (error) {
+      return { deny: `The board could not be reached: ${error instanceof Error ? error.message : String(error)}` }
+    }
   }).catch(($, e, next) => next(e))
 
   on('turn.start', async ($, e, next) => {
