@@ -39,6 +39,7 @@ restart. `SWITCHBOARD_HOME` moves the board's data folder, as it does for the hu
 | `todo` | The task tools (`TaskCreate`, `TaskUpdate`) or a `TodoWrite` list |
 | `startedAt` | When the session began, from `$.session.usage().startedAt` (a resumed session's first launch) |
 | `lastSaid` | The end (400 characters) of the main loop's final answer of the latest turn that said something, from `turn.complete`; no model call |
+| `activity` | What the main loop's latest tool call is doing, at most 80 characters, set when the call starts (`editing state.ts`, `running <Bash description>`, `board_write (agent-switchboard)`); kept after the turn ends (since 0.9.3) |
 | `cost` | `$.session.usage().cost.usd`, after each turn and on each heartbeat |
 | `heartbeatAt` | Every 15 seconds; the board shows a session as stalled after 60 seconds without one |
 | `endedAt`, `endReason` | `session.end` and its reason (`prompt_input_exit`, `clear`, `resume`, `logout`, `other`) |

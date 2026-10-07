@@ -19,7 +19,7 @@ plugin marketplace (`github.com/dgsantana/claude-mods`). See README.md for what 
 | `plugins/agent-cockpit/tests/*.test.ts` | Engine tests (`claude plugin test`); `tests/world.ts` fakes fs/session/env |
 | `plugins/agent-switchboard/` | The agent-switchboard plugin: publishes each session's state as an Agent Switchboard snapshot file |
 | `plugins/agent-switchboard/hooks/register.ts` | Its hooks module; every `$` call lives here |
-| `plugins/agent-switchboard/hooks/state.ts`, `snapshot.ts`, `prompt.ts`, `settings.ts`, `messages.ts`, `edits.ts`, `board.ts` | Pure logic: the session state machine, snapshot format v1 with its files, prompts answered from or sent by the board, the board settings it reads, messages between sessions, files the session's tools edit, the whiteboard tools' definitions |
+| `plugins/agent-switchboard/hooks/state.ts`, `snapshot.ts`, `prompt.ts`, `settings.ts`, `messages.ts`, `edits.ts`, `board.ts`, `activity.ts` | Pure logic: the session state machine, snapshot format v1 with its files, prompts answered from or sent by the board, the board settings it reads, messages between sessions, files the session's tools edit, the whiteboard tools' definitions, the one-line activity of a tool call |
 | `scripts/` | `vendor-themes.ts` (regenerate themes from an omp checkout), `settings-table.ts --write` (README table) |
 | `examples/.agents/` | Sample layered config, APPEND_SYSTEM, rules and a custom theme |
 | `docs/superpowers/` | Specs and implementation plans |

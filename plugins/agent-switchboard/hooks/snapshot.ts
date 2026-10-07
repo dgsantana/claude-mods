@@ -28,6 +28,8 @@ export interface Snapshot {
   cost: number
   /** The end of the session's latest answer: where its conclusion is. */
   lastSaid?: { text: string; at: string }
+  /** What the session's latest tool call is doing, at most 80 characters; kept while idle. */
+  activity?: { text: string; at: string }
   endedAt?: string
   endReason?: string
 }
@@ -58,6 +60,7 @@ export function toSnapshot(state: SessionState): Snapshot {
     const tail = text.length <= LIMITS.lastSaid ? text : `…${text.slice(text.length - LIMITS.lastSaid + 1)}`
     snapshot.lastSaid = { text: tail, at: iso(state.lastSaid.at) }
   }
+  if (state.activity) snapshot.activity = { text: state.activity.text, at: iso(state.activity.at) }
   if (state.ended) {
     snapshot.endedAt = iso(state.ended.at)
     snapshot.endReason = cut(state.ended.reason, LIMITS.id)

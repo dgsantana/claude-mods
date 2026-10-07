@@ -332,3 +332,17 @@ test('the whiteboard tools are registered at start; with no board named they use
   const write = requests.find(r => r.method === 'POST' && r.url.endsWith('/api/boards/p-00000001/ops'))
   expect(write?.body).toMatchObject({ project: '/repo', author: { kind: 'session', sessionId: 'sess-1', tool: 'claude-code' } })
 })
+
+test("the snapshot says what the session's latest tool call is doing, and keeps it once idle; a subagent's leaves it", async ($, on) => {
+  const w = world(on)
+  on('tool.call', () => ({ result: {} as never }))
+  await $.session.start(START)
+  await $.turn.start({ text: 'go', turnId: 't' } as never)
+  await $.tool.call({ tool: 'Edit', tool_use_id: 'e1', file_path: '/repo/src/state.ts', old_string: 'a', new_string: 'b' } as never)
+  await $.tool.call({ tool: 'Read', tool_use_id: 'r1', file_path: '/repo/x.ts', agentId: 'sub' } as never)
+  await $.turn.complete(DONE)
+  expect(w.snapshot().state).toBe('idle')
+  expect(w.snapshot().activity).toMatchObject({ text: 'editing state.ts' })
+  await $.tool.call({ tool: 'mcp__agent-switchboard__board_list', tool_use_id: 'b1' } as never)
+  expect(w.snapshot().activity).toMatchObject({ text: 'board_list (agent-switchboard)' })
+})

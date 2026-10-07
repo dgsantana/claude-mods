@@ -40,6 +40,8 @@ export interface SessionState {
   heartbeatAt: number
   /** The main loop's final answer of its latest turn that said something. */
   lastSaid?: { text: string; at: number }
+  /** What the main loop's latest tool call is doing; kept after the turn ends. */
+  activity?: { text: string; at: number }
   ended?: { at: number; reason: string }
 }
 
@@ -50,6 +52,7 @@ export type SessionEvent =
   /** `since`: when the prompt opened, when it is known only later; `at` otherwise. */
   | { type: 'permission_asked'; toolUseId: string; question: string; since?: number; at: number }
   | { type: 'permission_decided'; toolUseId: string; at: number }
+  | { type: 'tool_started'; activity: string; at: number }
   | { type: 'tool_finished'; toolUseId: string; at: number }
   | { type: 'task_created'; id: string; subject: string; at: number }
   | { type: 'task_updated'; id: string; status?: TaskStatus | 'deleted'; subject?: string; at: number }
@@ -115,6 +118,8 @@ export function next(state: SessionState, event: SessionEvent): SessionState {
       // AskUserQuestion is itself put to the permission check; its question says more.
       if (state.waiting.some(w => w.toolUseId === event.toolUseId)) return active
       return { ...active, waiting: [...state.waiting, { toolUseId: event.toolUseId, question: event.question, count: 1, since: event.since ?? event.at }] }
+    case 'tool_started':
+      return { ...active, activity: { text: event.activity, at: event.at } }
     case 'permission_decided':
     case 'tool_finished':
       return { ...active, waiting: state.waiting.filter(w => w.toolUseId !== event.toolUseId) }

@@ -8,6 +8,7 @@
 // an update, never the session its work.
 
 import type { EngineInterface, Register } from 'claude-code'
+import { activityOf } from './activity'
 import { BOARD_TOOL_CALLS, BOARD_TOOLS, type BoardToolName, boardListText, boardToolOf, tagOutcomeText } from './board'
 import { editedPathOf, type Edit, withEdit } from './edits'
 import { isRecord } from './guards'
@@ -415,6 +416,8 @@ export const register: Register = on => {
   on('tool.call', { tool: BOARD_TOOL_CALLS }, async ($, e, next) => {
     const tool = boardToolOf(e.tool)
     if (!tool) return next(e)
+    // Answered here without `next`, so the main-loop hook below never sees it: note the activity here.
+    if (e.agentId === undefined) await apply($, { type: 'tool_started', activity: activityOf(e.tool, ownArgs(e)), at: await $.clock.now() })
     try {
       return { result: await runBoardTool($, tool, ownArgs(e)) }
     } catch (error) {
@@ -466,6 +469,7 @@ export const register: Register = on => {
   on('tool.call', async ($, e, next) => {
     const id = e.tool_use_id
     if (e.agentId !== undefined || id === undefined) return next(e)
+    await apply($, { type: 'tool_started', activity: activityOf(e.tool, ownArgs(e)), at: await $.clock.now() })
     if (e.tool === 'AskUserQuestion') await apply($, { type: 'ask_opened', toolUseId: id, questions: questionsOf(e), at: await $.clock.now() })
     let settle: (answerText: string) => void = () => {}
     const fromBoard = new Promise<string>(resolve => {
