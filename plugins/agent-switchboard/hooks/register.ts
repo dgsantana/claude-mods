@@ -8,11 +8,12 @@
 // an update, never the session its work.
 
 import type { EngineInterface, Register } from 'claude-code'
+import { editedPathOf, type Edit, withEdit } from './edits'
 import { isRecord } from './guards'
 import { type Message, receivedOf, withMessage } from './messages'
 import { type BoardPrompt, callKey, outcomeOf, ownArgs, promptOf, slashCommandOf } from './prompt'
 import { promptDelayMsOf, promptingAllowedOf } from './settings'
-import { agentDirOf, boardHomeOf, messagesPathOf, saidPathOf, saidTextOf, settingsPathOf, snapshotPathOf, toSnapshot, turnOf, turnsPathOf, withTurn } from './snapshot'
+import { agentDirOf, boardHomeOf, editsPathOf, messagesPathOf, saidPathOf, saidTextOf, settingsPathOf, snapshotPathOf, toSnapshot, turnOf, turnsPathOf, withTurn } from './snapshot'
 import { next as advance, permissionQuestion, type SessionEvent, type SessionState, startSession, type TaskStatus } from './state'
 
 const HEARTBEAT_MS = 15_000
@@ -150,6 +151,26 @@ async function appendTurn($: EngineInterface, state: SessionState): Promise<void
       existing = undefined
     }
     await $.fs.write(path, withTurn(existing, turn))
+  })
+  writes = write.catch(() => {})
+  await write
+}
+
+/** Adds a file a tool edited to the session's record of its edits (increment 019). */
+async function recordEdit($: EngineInterface, edit: Edit): Promise<void> {
+  const state = await current($)
+  const home = await boardHome($)
+  const path = state && home && editsPathOf(home, state.sessionId)
+  if (!path) return
+  const write = writes.then(async () => {
+    let existing: string | undefined
+    try {
+      const read = await $.fs.read(path)
+      existing = typeof read === 'string' ? read : undefined
+    } catch {
+      existing = undefined
+    }
+    await $.fs.write(path, withEdit(existing, edit))
   })
   writes = write.catch(() => {})
   await write
@@ -359,6 +380,21 @@ export const register: Register = on => {
       $.clock.after(0, () => {
         pickUpPrompts($).catch(() => {})
       })
+    }
+    return result
+  }).catch(($, e, next) => next(e))
+
+  // The files the session's tools edit, a subagent's included, for the board to group changes by the
+  // turn that made them (increment 019): recorded once the call succeeded, never changed. Matched by tool,
+  // since the engine allows one unmatched hook per event (the board's prompt race below).
+  on('tool.call', { tool: ['Edit', 'Write', 'NotebookEdit'] }, async ($, e, next) => {
+    const result = await next(e)
+    try {
+      const path = editedPathOf(e.tool, ownArgs(e))
+      const failed = 'deny' in result || ('isError' in result && result.isError === true)
+      if (path && !failed) await recordEdit($, { at: new Date(await $.clock.now()).toISOString(), path })
+    } catch (error) {
+      await report($, error).catch(() => {})
     }
     return result
   }).catch(($, e, next) => next(e))

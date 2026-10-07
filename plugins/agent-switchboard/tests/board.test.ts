@@ -291,3 +291,15 @@ test("messages with other sessions are recorded after delivery and passed on unc
     ['out', 'claude-mods-a6', 'Thanks.'],
   ])
 })
+
+test("a successful edit, a subagent's included, is recorded with its file; a read or a failed edit is not", async ($, on) => {
+  const w = world(on)
+  on('tool.call', ($, e) => ('file_path' in e && e.file_path === '/repo/broken.ts' ? { result: {}, text: 'failed', isError: true } : { result: {}, text: 'ok' }) as never)
+  await $.session.start(START)
+  await $.tool.call({ tool: 'Edit', file_path: '/repo/src/a.ts', old_string: 'x', new_string: 'y' } as never)
+  await $.tool.call({ tool: 'Write', file_path: '/repo/src/b.ts', content: 'b', agentId: 'sub' } as never)
+  await $.tool.call({ tool: 'Read', file_path: '/repo/src/c.ts' } as never)
+  await $.tool.call({ tool: 'Edit', file_path: '/repo/broken.ts', old_string: 'x', new_string: 'y' } as never)
+  const edits = JSON.parse(w.fake.files.get('/home/u/.agent-switchboard/said/sess-1.edits.json') ?? '[]') as Array<{ path: string }>
+  expect(edits.map(e => e.path)).toEqual(['/repo/src/a.ts', '/repo/src/b.ts'])
+})

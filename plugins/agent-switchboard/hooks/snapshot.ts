@@ -137,6 +137,12 @@ export function messagesPathOf(boardHome: string, sessionId: string): string | u
   return join(boardHome, 'said', `${sessionId}.messages.json`)
 }
 
+/** Where the files a session's tools edit go: `said/<sessionId>.edits.json` (increment 019). */
+export function editsPathOf(boardHome: string, sessionId: string): string | undefined {
+  if (!SAFE_ID.test(sessionId) || sessionId.includes('..')) return undefined
+  return join(boardHome, 'said', `${sessionId}.edits.json`)
+}
+
 /** The board's settings file, which the hub owns; this mod only reads it. */
 export function settingsPathOf(boardHome: string): string {
   return join(boardHome, 'settings.json')

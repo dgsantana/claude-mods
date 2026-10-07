@@ -16,6 +16,7 @@ machine and calls no model.
 | `said/<sessionId>.md` | write | The session's full last answer (below) |
 | `said/<sessionId>.turns.json` | read, write | The session's last 50 turns, each answer in full (below) |
 | `said/<sessionId>.messages.json` | read, write | The session's last 200 messages with other sessions (below) |
+| `said/<sessionId>.edits.json` | read, write | The files the session's tools edited, the last 500 (below) |
 | `settings.json` | read | The board's settings: `board.promptDelaySeconds` and `board.allowPrompting` |
 | hub on `127.0.0.1:<SWITCHBOARD_PORT>` | HTTP | Open prompts and their answers; prompts written on the board |
 
@@ -68,7 +69,13 @@ for a message from another session, with `peer` the sender's `from-name` when th
 engine's envelope; `text` is the body without it. A subagent's messages are left out. The hooks record
 after the engine has handled each message and never change it.
 
-The mod never deletes these files; they stay after the session ends, two per session.
+Since 0.8.0 each successful Edit, Write or NotebookEdit call, a subagent's included, is appended to
+`said/<sessionId>.edits.json` as `{ at, path }`, the path as the tool received it, the last 500 kept. The
+board uses it to group a worktree's uncommitted changes under the turn that made them. Files changed
+through Bash (sed, scripts, formatters) are not seen.
+
+The mod never deletes these files; they stay after the session ends, four per session (`.md`, `.turns.json`,
+`.messages.json`, `.edits.json`). The board's hub removes them with the session's snapshot when it prunes it.
 
 ## Answering from the board
 
