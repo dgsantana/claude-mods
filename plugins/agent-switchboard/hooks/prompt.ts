@@ -101,3 +101,17 @@ export function callKey(tool: string, args: unknown): string {
 export function ownArgs(args: unknown): Record<string, unknown> {
   return Object.fromEntries(Object.entries(isRecord(args) ? args : {}).filter(([key]) => !RESERVED.includes(key)))
 }
+
+/**
+ * A board prompt that is one of the session's slash commands, as the person would type it in the
+ * terminal (`/reload-plugins`, `/compact keep the plan`): the command and its arguments. Anything else,
+ * an unknown name included, is a prompt for the model.
+ */
+export function slashCommandOf(text: string, known: readonly string[]): { command: string; args: string } | undefined {
+  const typed = /^\/(\S+)(?:\s+([\s\S]*))?$/.exec(text.trim())
+  const name = typed?.[1]?.toLowerCase()
+  // `$.command.list()` gives names only, no aliases; capitals typed are forgiven, as the typeahead does.
+  const command = name === undefined ? undefined : known.find(k => k.toLowerCase() === name)
+  if (command === undefined) return undefined
+  return { command, args: (typed?.[2] ?? '').trim() }
+}

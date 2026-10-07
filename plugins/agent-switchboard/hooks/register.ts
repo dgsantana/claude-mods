@@ -9,9 +9,10 @@
 
 import type { EngineInterface, Register } from 'claude-code'
 import { isRecord } from './guards'
-import { type BoardPrompt, callKey, outcomeOf, ownArgs, promptOf } from './prompt'
+import { type Message, receivedOf, withMessage } from './messages'
+import { type BoardPrompt, callKey, outcomeOf, ownArgs, promptOf, slashCommandOf } from './prompt'
 import { promptDelayMsOf, promptingAllowedOf } from './settings'
-import { agentDirOf, boardHomeOf, saidPathOf, saidTextOf, settingsPathOf, snapshotPathOf, toSnapshot, turnOf, turnsPathOf, withTurn } from './snapshot'
+import { agentDirOf, boardHomeOf, messagesPathOf, saidPathOf, saidTextOf, settingsPathOf, snapshotPathOf, toSnapshot, turnOf, turnsPathOf, withTurn } from './snapshot'
 import { next as advance, permissionQuestion, type SessionEvent, type SessionState, startSession, type TaskStatus } from './state'
 
 const HEARTBEAT_MS = 15_000
@@ -33,6 +34,8 @@ const offered = new Set<string>()
 const allowedByBoard = new Set<string>()
 /** The hub's per-run token; fetched on first use and again when the hub refuses it. */
 let hubToken: string | undefined
+/** Senders' names by the `from` address their messages came from, to name a reply sent to that address. */
+const peerNames = new Map<string, string>()
 /** Whether this session is asking the hub for a prompt written on the board (decision 0010). */
 let pickingUp = false
 const PLUGIN = 'agent-switchboard'
@@ -152,6 +155,26 @@ async function appendTurn($: EngineInterface, state: SessionState): Promise<void
   await write
 }
 
+/** Adds a message to the session's record of its messages with other sessions (increment 015). */
+async function recordMessage($: EngineInterface, message: Message): Promise<void> {
+  const state = await current($)
+  const home = await boardHome($)
+  const path = state && home && messagesPathOf(home, state.sessionId)
+  if (!path) return
+  const write = writes.then(async () => {
+    let existing: string | undefined
+    try {
+      const read = await $.fs.read(path)
+      existing = typeof read === 'string' ? read : undefined
+    } catch {
+      existing = undefined
+    }
+    await $.fs.write(path, withMessage(existing, message))
+  })
+  writes = write.catch(() => {})
+  await write
+}
+
 async function boardHome($: EngineInterface): Promise<string | undefined> {
   return boardHomeOf({
     SWITCHBOARD_HOME: await $.env.get('SWITCHBOARD_HOME'),
@@ -203,8 +226,12 @@ async function pickUpPrompts($: EngineInterface): Promise<void> {
       if (response.status !== 200) return
       const parsed: unknown = JSON.parse(response.text)
       if (!isRecord(parsed) || typeof parsed.text !== 'string') return
+      // One of the session's slash commands runs as that command, as it would typed in the terminal;
+      // `$.prompt.submit` would hand it to the model as words (2026-10-07).
+      const command = slashCommandOf(parsed.text, (await $.command.list()).map(c => c.name))
+      if (command) await $.command.run(command)
       // Held by Claude Code until the session is idle, should a turn have started meanwhile.
-      await $.prompt.submit({ text: parsed.text, asUser: true })
+      else await $.prompt.submit({ text: parsed.text, asUser: true })
       return
     }
   } catch (error) {
@@ -424,7 +451,40 @@ export const register: Register = on => {
     return next(e)
   }).catch(($, e, next) => next(e))
 
+  // Messages between sessions, for the board's conversations (increment 015): recorded once the engine
+  // has handled them, never changed, and nothing after `next` may throw. A subagent's messages, and
+  // deliveries from anything but another session, are left out.
+  on('session.send', async ($, e, next) => {
+    const result = await next(e)
+    try {
+      if (e.agentId === undefined && result.isDelivered) {
+        // A reply addressed to a received `from` address is named by that message's `from-name`.
+        const peer = peerNames.get(e.to) ?? e.to
+        await recordMessage($, { at: new Date(await $.clock.now()).toISOString(), direction: 'out', peer, text: e.text.trim() })
+      }
+    } catch (error) {
+      await report($, error).catch(() => {})
+    }
+    return result
+  }).catch(($, e, next) => next(e))
+
+  on('session.receive', async ($, e, next) => {
+    const result = await next(e)
+    try {
+      const fromSession = (e.origin.kind === 'peer' || e.origin.kind === 'peer-send-message') && !('teammate' in e.origin)
+      if (e.agentId === undefined && fromSession && result.consumed === undefined) {
+        const { address, ...received } = receivedOf(e.text)
+        if (address && received.peer) peerNames.set(address, received.peer)
+        await recordMessage($, { at: new Date(await $.clock.now()).toISOString(), direction: 'in', ...received })
+      }
+    } catch (error) {
+      await report($, error).catch(() => {})
+    }
+    return result
+  }).catch(($, e, next) => next(e))
+
   // Every session.end hook shares one 1.5 s budget: one event, one write.
+
   on('session.end', async ($, e, next) => {
     if (session?.sessionId === e.sessionId) await apply($, { type: 'session_ended', reason: e.reason, at: await $.clock.now() })
     return next(e)

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { callKey, outcomeOf, ownArgs, promptOf } from '../hooks/prompt'
+import { callKey, outcomeOf, ownArgs, promptOf, slashCommandOf } from '../hooks/prompt'
 
 describe('the prompt sent to the board', () => {
   test('a Bash call: its description and the full command', () => {
@@ -86,5 +86,21 @@ describe('matching a re-run to its permission check', () => {
     expect(callKey('Bash', call)).toBe(callKey('Bash', { description: 'List', command: 'ls' }))
     expect(callKey('Bash', call)).not.toBe(callKey('Bash', { command: 'ls -a', description: 'List' }))
     expect(ownArgs(call)).toEqual({ command: 'ls', description: 'List' })
+  })
+})
+
+describe('a board prompt that is a slash command (decision 0010, as typed in the terminal)', () => {
+  const known = ['reload-plugins', 'compact', 'dgs']
+  test('a known command runs as that command, with its arguments', () => {
+    expect(slashCommandOf('/reload-plugins', known)).toEqual({ command: 'reload-plugins', args: '' })
+    expect(slashCommandOf('  /compact keep the plan  ', known)).toEqual({ command: 'compact', args: 'keep the plan' })
+    expect(slashCommandOf('/Reload-Plugins', known)).toEqual({ command: 'reload-plugins', args: '' })
+  })
+
+  test('anything else is a prompt for the model', () => {
+    expect(slashCommandOf('/nonsense here', known)).toBeUndefined()
+    expect(slashCommandOf('reload-plugins', known)).toBeUndefined()
+    expect(slashCommandOf('Use /compact later', known)).toBeUndefined()
+    expect(slashCommandOf('/', known)).toBeUndefined()
   })
 })

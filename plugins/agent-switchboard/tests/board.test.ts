@@ -266,3 +266,28 @@ test("each main turn that said something joins the session's turn history; a sub
   const turns = JSON.parse(w.fake.files.get('/home/u/.agent-switchboard/said/sess-1.turns.json') ?? '[]') as Array<{ text: string }>
   expect(turns.map(t => t.text)).toEqual(['First conclusion.', 'Second conclusion.'])
 })
+
+test("messages with other sessions are recorded after delivery and passed on unchanged; others are not", async ($, on) => {
+  const w = world(on)
+  const sent: string[] = []
+  on('session.send', ($, e) => {
+    sent.push(e.text)
+    return { isDelivered: true }
+  })
+  on('session.receive', ($, e) => ({ text: e.text }))
+  await $.session.start(START)
+  expect(await $.session.send({ to: 'claude-mods-a6', text: 'Please push.', origin: { kind: 'model' } })).toEqual({ isDelivered: true })
+  const envelope = '<cross-session-message from="uds:x" from-name="claude-mods-a6" from-mode="prompting">\nPushed.\n</cross-session-message>'
+  expect(await $.session.receive({ origin: { kind: 'peer' }, text: envelope } as never)).toEqual({ text: envelope })
+  await $.session.receive({ origin: { kind: 'peer' }, text: 'for a subagent', agentId: 'sub' } as never)
+  await $.session.receive({ origin: { kind: 'bridge' }, text: 'from Remote Control' } as never)
+  // A reply sent to the received `from` address is named by that message's `from-name`.
+  await $.session.send({ to: 'uds:x', text: 'Thanks.', origin: { kind: 'model' } })
+  expect(sent).toEqual(['Please push.', 'Thanks.'])
+  const messages = JSON.parse(w.fake.files.get('/home/u/.agent-switchboard/said/sess-1.messages.json') ?? '[]') as Array<{ direction: string; peer?: string; text: string }>
+  expect(messages.map(m => [m.direction, m.peer, m.text])).toEqual([
+    ['out', 'claude-mods-a6', 'Please push.'],
+    ['in', 'claude-mods-a6', 'Pushed.'],
+    ['out', 'claude-mods-a6', 'Thanks.'],
+  ])
+})

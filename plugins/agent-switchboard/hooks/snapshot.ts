@@ -131,6 +131,12 @@ export function withTurn(existing: string | undefined, turn: { at: string; text:
   return JSON.stringify([...kept, turn].slice(-MAX_TURNS))
 }
 
+/** Where a session's messages with other sessions go: `said/<sessionId>.messages.json` (increment 015). */
+export function messagesPathOf(boardHome: string, sessionId: string): string | undefined {
+  if (!SAFE_ID.test(sessionId) || sessionId.includes('..')) return undefined
+  return join(boardHome, 'said', `${sessionId}.messages.json`)
+}
+
 /** The board's settings file, which the hub owns; this mod only reads it. */
 export function settingsPathOf(boardHome: string): string {
   return join(boardHome, 'settings.json')

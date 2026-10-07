@@ -15,6 +15,7 @@ machine and calls no model.
 | `sessions/<sessionId>.json` | write | The snapshot (below) |
 | `said/<sessionId>.md` | write | The session's full last answer (below) |
 | `said/<sessionId>.turns.json` | read, write | The session's last 50 turns, each answer in full (below) |
+| `said/<sessionId>.messages.json` | read, write | The session's last 200 messages with other sessions (below) |
 | `settings.json` | read | The board's settings: `board.promptDelaySeconds` and `board.allowPrompting` |
 | hub on `127.0.0.1:<SWITCHBOARD_PORT>` | HTTP | Open prompts and their answers; prompts written on the board |
 
@@ -58,6 +59,14 @@ page's timeline: a JSON array of `{ at, text }`, oldest first, where `text` is t
 capped at 16 KB with its end kept and marked with a leading `…` (since 0.6.0; before, the same
 400-character end as `lastSaid`). It keeps the last 50 turns; a missing or unreadable file starts a new
 history.
+
+Since 0.7.0 the session's messages with other sessions on this machine (Claude Code's SendMessage between
+sessions) go to `said/<sessionId>.messages.json`, for the board's conversations: a JSON array of
+`{ at, direction, peer?, text }`, oldest first, the last 200 kept, each text at most 16 KB with its end
+kept. `direction` is `out` for a delivered send, with `peer` the recipient as it was addressed, and `in`
+for a message from another session, with `peer` the sender's `from-name` when the delivery carries the
+engine's envelope; `text` is the body without it. A subagent's messages are left out. The hooks record
+after the engine has handled each message and never change it.
 
 The mod never deletes these files; they stay after the session ends, two per session.
 
