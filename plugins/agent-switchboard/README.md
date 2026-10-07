@@ -14,7 +14,7 @@ machine and calls no model.
 |---|---|---|
 | `sessions/<sessionId>.json` | write | The snapshot (below) |
 | `said/<sessionId>.md` | write | The session's full last answer (below) |
-| `said/<sessionId>.turns.json` | read, write | The session's last 50 turn conclusions (below) |
+| `said/<sessionId>.turns.json` | read, write | The session's last 50 turns, each answer in full (below) |
 | `settings.json` | read | The board's settings: `board.promptDelaySeconds` and `board.allowPrompting` |
 | hub on `127.0.0.1:<SWITCHBOARD_PORT>` | HTTP | Open prompts and their answers; prompts written on the board |
 
@@ -54,8 +54,10 @@ board folder, as the model wrote it (Markdown), for the board's project page. An
 its last 64 KB, marked with a leading `…`. The snapshot's `lastSaid` holds only the last 400 characters.
 
 Each such turn also joins `said/<sessionId>.turns.json`, the session's turn history for the project
-page's timeline: a JSON array of `{ at, text }`, oldest first, where `text` is the same 400-character
-end as `lastSaid`. It keeps the last 50 turns; a missing or unreadable file starts a new history.
+page's timeline: a JSON array of `{ at, text }`, oldest first, where `text` is the turn's whole answer,
+capped at 16 KB with its end kept and marked with a leading `…` (since 0.6.0; before, the same
+400-character end as `lastSaid`). It keeps the last 50 turns; a missing or unreadable file starts a new
+history.
 
 The mod never deletes these files; they stay after the session ends, two per session.
 

@@ -97,8 +97,18 @@ export function saidTextOf(text: string): string {
   return text.length <= MAX_SAID_CHARS ? text : `…${text.slice(text.length - MAX_SAID_CHARS + 1)}`
 }
 
-/** How many turn conclusions the history beside the snapshot keeps (increment 011). */
+/** How many turns the history beside the snapshot keeps (increment 011). */
 export const MAX_TURNS = 50
+
+/** Each turn's answer is capped here, its end kept (increment 014); 50 of them stay under 1 MB. */
+export const MAX_TURN_CHARS = 16 * 1024
+
+/** A turn for the history: the session's last answer in full up to the cap, not the snapshot's tail. */
+export function turnOf(state: SessionState): { at: string; text: string } | undefined {
+  if (!state.lastSaid) return undefined
+  const { text, at } = state.lastSaid
+  return { at: iso(at), text: text.length <= MAX_TURN_CHARS ? text : `…${text.slice(text.length - MAX_TURN_CHARS + 1)}` }
+}
 
 /** Where a session's turn history goes: `said/<sessionId>.turns.json` in the board folder. */
 export function turnsPathOf(boardHome: string, sessionId: string): string | undefined {

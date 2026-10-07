@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { agentDirOf, boardHomeOf, MAX_SAID_CHARS, MAX_TURNS, saidPathOf, saidTextOf, snapshotPathOf, toSnapshot, turnsPathOf, withTurn } from '../hooks/snapshot'
+import { agentDirOf, boardHomeOf, MAX_SAID_CHARS, MAX_TURN_CHARS, MAX_TURNS, saidPathOf, saidTextOf, snapshotPathOf, toSnapshot, turnOf, turnsPathOf, withTurn } from '../hooks/snapshot'
 import { next, startSession } from '../hooks/state'
 
 const T0 = Date.UTC(2026, 9, 6, 10, 0, 0)
@@ -131,6 +131,31 @@ describe('the turn history beside the snapshot', () => {
     expect(turns).toHaveLength(MAX_TURNS)
     expect(turns[0]?.text).toBe('turn 3')
     expect(turns.at(-1)?.text).toBe('turn 52')
+  })
+
+  test('a turn keeps the whole answer, not the snapshot tail (increment 014)', () => {
+    const answer = `First line.
+
+1. one
+2. two
+
+${'x'.repeat(2000)}
+The end.`
+    const ended = { ...start(), lastSaid: { text: answer, at: T0 } }
+    expect(turnOf(ended)).toEqual({ at: '2026-10-06T10:00:00.000Z', text: answer })
+    expect(toSnapshot(ended).lastSaid?.text.length).toBe(400)
+  })
+
+  test('a turn longer than the cap keeps its end', () => {
+    const answer = `${'a'.repeat(MAX_TURN_CHARS)}THE END`
+    const text = turnOf({ ...start(), lastSaid: { text: answer, at: T0 } })?.text ?? ''
+    expect(text).toHaveLength(MAX_TURN_CHARS)
+    expect(text.startsWith('…')).toBe(true)
+    expect(text.endsWith('THE END')).toBe(true)
+  })
+
+  test('no answer, no turn', () => {
+    expect(turnOf(start())).toBeUndefined()
   })
 
   test('a missing or broken file starts afresh', () => {

@@ -11,7 +11,7 @@ import type { EngineInterface, Register } from 'claude-code'
 import { isRecord } from './guards'
 import { type BoardPrompt, callKey, outcomeOf, ownArgs, promptOf } from './prompt'
 import { promptDelayMsOf, promptingAllowedOf } from './settings'
-import { agentDirOf, boardHomeOf, saidPathOf, saidTextOf, settingsPathOf, snapshotPathOf, toSnapshot, turnsPathOf, withTurn } from './snapshot'
+import { agentDirOf, boardHomeOf, saidPathOf, saidTextOf, settingsPathOf, snapshotPathOf, toSnapshot, turnOf, turnsPathOf, withTurn } from './snapshot'
 import { next as advance, permissionQuestion, type SessionEvent, type SessionState, startSession, type TaskStatus } from './state'
 
 const HEARTBEAT_MS = 15_000
@@ -132,11 +132,11 @@ async function publishSaid($: EngineInterface, sessionId: string, text: string):
   await write
 }
 
-/** Adds a turn's conclusion to the session's history, for the project page's timeline (increment 011). */
+/** Adds a turn's answer to the session's history, for the project page's timeline (increments 011, 014). */
 async function appendTurn($: EngineInterface, state: SessionState): Promise<void> {
   const home = await boardHome($)
   const path = home && turnsPathOf(home, state.sessionId)
-  const turn = toSnapshot(state).lastSaid
+  const turn = turnOf(state)
   if (!path || !turn) return
   const write = writes.then(async () => {
     let existing: string | undefined
