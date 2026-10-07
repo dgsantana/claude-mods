@@ -8,7 +8,7 @@
 // an update, never the session its work.
 
 import type { EngineInterface, Register } from 'claude-code'
-import { BOARD_TOOL_CALLS, BOARD_TOOLS, type BoardToolName, boardListText, boardToolOf } from './board'
+import { BOARD_TOOL_CALLS, BOARD_TOOLS, type BoardToolName, boardListText, boardToolOf, tagOutcomeText } from './board'
 import { editedPathOf, type Edit, withEdit } from './edits'
 import { isRecord } from './guards'
 import { type Message, receivedOf, withMessage } from './messages'
@@ -229,7 +229,8 @@ async function settingsText($: EngineInterface): Promise<string | undefined> {
 
 /**
  * While the session is idle and the board may prompt it, asks the hub for the next prompt written on the
- * board, in rounds under 30 s, and submits it as the person's words. Stops when a turn starts (the next
+ * board, in rounds under 30 s, and submits it: as the person's words when the person wrote it, framed as
+ * this plugin's message otherwise. Stops when a turn starts (the next
  * `turn.complete` starts it again), when prompting is off, or on any failure; the heartbeat retries.
  */
 async function pickUpPrompts($: EngineInterface): Promise<void> {
@@ -248,12 +249,17 @@ async function pickUpPrompts($: EngineInterface): Promise<void> {
       if (response.status !== 200) return
       const parsed: unknown = JSON.parse(response.text)
       if (!isRecord(parsed) || typeof parsed.text !== 'string') return
+      // Only the person's own prompt is their words, and only it may run a slash command (decision
+      // 0015). Another session's, or one that does not say, keeps the plugin's frame for the model.
+      const byPerson = parsed.from === 'person'
       // One of the session's slash commands runs as that command, as it would typed in the terminal;
       // `$.prompt.submit` would hand it to the model as words (2026-10-07).
-      const command = slashCommandOf(parsed.text, (await $.command.list()).map(c => c.name))
+      const command = byPerson ? slashCommandOf(parsed.text, (await $.command.list()).map(c => c.name)) : undefined
       if (command) await $.command.run(command)
       // Held by Claude Code until the session is idle, should a turn have started meanwhile.
-      else await $.prompt.submit({ text: parsed.text, asUser: true })
+      else if (byPerson) await $.prompt.submit({ text: parsed.text, asUser: true })
+      // The engine refuses a plugin prompt that begins with `/`; quoting it keeps it words.
+      else await $.prompt.submit({ text: parsed.text.trimStart().startsWith('/') ? `> ${parsed.text}` : parsed.text })
       return
     }
   } catch (error) {
@@ -316,9 +322,10 @@ async function runBoardTool($: EngineInterface, tool: BoardToolName, args: Recor
   const state = await current($)
   const author = { kind: 'session', sessionId: state?.sessionId ?? 'unknown', tool: 'claude-code' }
   const ops = tool === 'board_comment' ? [{ op: 'comment', id: args.block, text: args.text }] : args.ops
-  const answer = await hubSend($, 'POST', `${where}/ops`, { ops, author, ...(project ? { project } : {}) })
+  const notify = tool === 'board_comment' && Array.isArray(args.notify) ? args.notify : undefined
+  const answer = await hubSend($, 'POST', `${where}/ops`, { ops, author, ...(project ? { project } : {}), ...(notify?.length ? { notify } : {}) })
   if (answer.status !== 200) return `Not applied: ${answer.text}`
-  if (tool === 'board_comment') return 'Commented.'
+  if (tool === 'board_comment') return `Commented.${tagOutcomeText(answer.text)}`
   return `Applied. The board now:\n\n${await readBoard($, board, outline)}`
 }
 

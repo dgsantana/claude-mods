@@ -76,10 +76,21 @@ export const BOARD_TOOLS = [
   },
   {
     name: 'board_comment',
-    description: 'Comment on one block of a whiteboard: an answer to the user\'s question there, a review note, a doubt. Comments are shown beside the block, with you as their author.',
+    description:
+      "Comment on one block of a whiteboard: an answer to the user's question there, a review note, a doubt. Comments are shown beside the block, with you as their author. To draw another session's attention to the block, tag it with `notify`: it is prompted to read the board when prompting from the board is on; the result says whether it was. Tag only a session the block concerns; one session may tag another only a few times an hour.",
     inputSchema: {
       type: 'object',
-      properties: { board: BOARD_ARG, block: { type: 'string', description: 'The block id, from board_read.' }, text: { type: 'string', description: 'Markdown.' } },
+      properties: {
+        board: BOARD_ARG,
+        block: { type: 'string', description: 'The block id, from board_read.' },
+        text: { type: 'string', description: 'Markdown.' },
+        notify: {
+          type: 'array',
+          items: { type: 'string' },
+          description:
+            "Sessions to tag: the name sessions address it by (vade-server-37), its project (vade-server: that project's most recently active session) or its id. Each is prompted to read this comment.",
+        },
+      },
       required: ['block', 'text'],
     },
   },
@@ -111,4 +122,21 @@ export function boardListText(listJson: string): string {
         : [],
     )
     .join('\n')
+}
+
+/** What became of a comment's tags, from the hub's answer, as lines for the model; no tags, nothing. */
+export function tagOutcomeText(answerJson: string): string {
+  let answer: unknown
+  try {
+    answer = JSON.parse(answerJson)
+  } catch {
+    return ''
+  }
+  if (!isRecord(answer) || !Array.isArray(answer.tags) || answer.tags.length === 0) return ''
+  const lines = answer.tags.flatMap(t =>
+    isRecord(t) && typeof t.tag === 'string'
+      ? [t.sent === true ? `${t.tag}: prompted to read it` : `${t.tag}: not prompted, ${typeof t.reason === 'string' ? t.reason : 'no reason given'}`]
+      : [],
+  )
+  return lines.length ? `\nTags:\n${lines.join('\n')}` : ''
 }

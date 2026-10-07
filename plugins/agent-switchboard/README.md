@@ -94,6 +94,11 @@ labels it as sent from the plugin. The mod asks only while the session is idle, 
 setting is off. A prompt that is one of the session's slash commands (`/reload-plugins`) runs as that
 command through `$.command.run` instead (since 0.7.0).
 
+Since 0.9.2 each queued prompt says who wrote it (`from`). Only a prompt `from: "person"` is submitted as
+the person's words and may run a slash command. A prompt from another session (a whiteboard tag), or one
+that does not say, is submitted without `asUser`, so the model reads it framed as this plugin's message,
+and text that looks like a slash command is passed on as words.
+
 ## Whiteboards
 
 Since 0.9.0 the mod gives the model four tools for the board's shared whiteboards (decision 0014 in the
