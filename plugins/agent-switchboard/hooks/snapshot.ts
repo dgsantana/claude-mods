@@ -100,7 +100,10 @@ export function saidTextOf(text: string): string {
 /** How many turns the history beside the snapshot keeps (increment 011). */
 export const MAX_TURNS = 50
 
-/** Each turn's answer is capped here, its end kept (increment 014); 50 of them stay under 1 MB. */
+/**
+ * Each turn's answer is capped here, its end kept (increment 014): 16 K characters each; 50 turns are
+ * about 0.8 MB of mostly ASCII text, up to roughly 2.5 MB in the worst case.
+ */
 export const MAX_TURN_CHARS = 16 * 1024
 
 /** A turn for the history: the session's last answer in full up to the cap, not the snapshot's tail. */
