@@ -17,9 +17,6 @@ plugin marketplace (`github.com/dgsantana/claude-mods`). See README.md for what 
 | `plugins/agent-cockpit/builtin-rules/` | Rules vendored from oh-my-pi (MIT, see NOTICE). Don't edit; re-vendor |
 | `plugins/agent-cockpit/unit/*.spec.ts` | Unit tests for pure modules (`bun test`) |
 | `plugins/agent-cockpit/tests/*.test.ts` | Engine tests (`claude plugin test`); `tests/world.ts` fakes fs/session/env |
-| `plugins/agent-switchboard/` | The agent-switchboard plugin: publishes each session's state as an Agent Switchboard snapshot file |
-| `plugins/agent-switchboard/hooks/register.ts` | Its hooks module; every `$` call lives here |
-| `plugins/agent-switchboard/hooks/state.ts`, `snapshot.ts`, `prompt.ts`, `settings.ts`, `messages.ts`, `edits.ts`, `board.ts`, `activity.ts` | Pure logic: the session state machine, snapshot format v1 with its files, prompts answered from or sent by the board, the board settings it reads, messages between sessions, files the session's tools edit, the whiteboard tools' definitions, the one-line activity of a tool call |
 | `scripts/` | `vendor-themes.ts` (regenerate themes from an omp checkout), `settings-table.ts --write` (README table) |
 | `examples/.agents/` | Sample layered config, APPEND_SYSTEM, rules and a custom theme |
 | `docs/superpowers/` | Specs and implementation plans |
@@ -34,9 +31,8 @@ cd plugins/agent-cockpit && bunx -p typescript@5.9 tsc -p . --noEmit   # type-ch
 claude --plugin-dir plugins/agent-cockpit        # try it in a session
 ```
 
-The same four with `plugins/agent-switchboard` for that plugin. All must pass before a commit that
-touches `plugins/`. The snapshot format Agent Switchboard reads is specified in the
-agent-switchboard repository (`docs/reference/snapshot-format.md`); change it there first.
+All must pass before a commit that touches `plugins/`. The Agent Switchboard plugin lives in its own
+repository, `github.com/dgsantana/agent-switchboard-claude`.
 
 ## Hard constraints (enforced by the engine, not style)
 

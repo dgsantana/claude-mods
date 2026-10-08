@@ -1,15 +1,13 @@
 # claude-mods
 
-Claude Code mods, shared between workstations. Two plugins:
+Claude Code mods, shared between workstations. One plugin, **agent-cockpit** (formerly omp-port): the
+set of instruments around each session, a themed status line above the prompt, TTSR and layered rules,
+AGENTS.md and APPEND_SYSTEM loading, and an edit advisor. Most of it is ported from
+[oh-my-pi](https://github.com/can1357/oh-my-pi) (omp). Described below.
 
-- **agent-cockpit** (formerly omp-port) is the set of instruments around each session: a themed
-  status line above the prompt, TTSR and layered rules, AGENTS.md and APPEND_SYSTEM loading, and an
-  edit advisor. Most of it is ported from [oh-my-pi](https://github.com/can1357/oh-my-pi) (omp).
-  Described below.
-- **agent-switchboard** puts Claude Code sessions on Agent Switchboard, a local board for working
-  across many agent sessions at once: it publishes each session's state and last answer, lets the
-  board answer the session's prompts and, when the board allows it, send it new ones. See
-  [plugins/agent-switchboard/README.md](plugins/agent-switchboard/README.md).
+The Agent Switchboard plugin that used to live here has moved to its own repository,
+[agent-switchboard-claude](https://github.com/dgsantana/agent-switchboard-claude), beside the
+switchboard plugins for other agent harnesses.
 
 | Feature | What it does |
 |---|---|
@@ -211,8 +209,7 @@ claude plugin validate . && claude plugin validate plugins/agent-cockpit
 claude --plugin-dir plugins/agent-cockpit        # try it in a session
 ```
 
-The same commands with `plugins/agent-switchboard` cover the second plugin; `bun run test:unit`,
-`bun run test:plugin` and `bun run validate` run both.
+`bun run test:unit`, `bun run test:plugin` and `bun run validate` run the same checks.
 
 All engine calls (`$`) live in `plugins/agent-cockpit/hooks/register.tsx`: the engine only follows
 `$` into functions declared in the hooks module itself. Everything else is pure and imported.
