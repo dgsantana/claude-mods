@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { BOARD_TOOL_CALLS, BOARD_TOOLS, boardListText, boardToolOf, docLinksLine, tagOutcomeText } from '../hooks/board'
+import { BOARD_TOOL_CALLS, BOARD_TOOLS, boardListText, boardToolOf, docLinksLine, imageFilesOf, imageProblemOf, MAX_IMAGE_BYTES, tagOutcomeText, withImageHashes } from '../hooks/board'
 
 describe('the whiteboard tools (decision 0014)', () => {
   test('five tools, called by their full names', () => {
@@ -37,5 +37,33 @@ describe('the whiteboard tools (decision 0014)', () => {
       "Doc links for this project: `#/project/D%3A%5Cdev%5Ctools%5Comp-board/doc/` followed by the doc's path relative to the project, with / separators, as is.",
     )
     expect(docLinksLine('/home/u/src/claude-mods')).toContain('`#/project/%2Fhome%2Fu%2Fsrc%2Fclaude-mods/doc/`')
+  })
+})
+
+describe('images on a whiteboard (increment 027)', () => {
+  const ops = [
+    { op: 'addBlock', block: { kind: 'image', file: 'D:\\shots\\before.png', text: 'Before' } },
+    { op: 'addBlock', block: { kind: 'note', text: 'n' } },
+    { op: 'addBlock', block: { kind: 'image', file: '/tmp/after.webp' } },
+  ]
+
+  test('the local files an addBlock asks to upload, and only those', () => {
+    expect(imageFilesOf(ops)).toEqual(['D:\\shots\\before.png', '/tmp/after.webp'])
+    expect(imageFilesOf('not ops')).toEqual([])
+  })
+
+  test('each file is replaced by its stored hash before the ops are sent', () => {
+    const sent = withImageHashes(ops, { 'D:\\shots\\before.png': 'h1', '/tmp/after.webp': 'h2' }) as Array<{ block: Record<string, unknown> }>
+    expect(sent[0]?.block).toEqual({ kind: 'image', image: 'h1', text: 'Before' })
+    expect(sent[1]?.block).toEqual({ kind: 'note', text: 'n' })
+    expect(sent[2]?.block).toEqual({ kind: 'image', image: 'h2' })
+  })
+
+  test('only PNG, JPEG, WebP or GIF files up to 2 MB are sent to the hub', () => {
+    expect(imageProblemOf('a.PNG', 10)).toBeUndefined()
+    expect(imageProblemOf('a.jpeg', MAX_IMAGE_BYTES)).toBeUndefined()
+    expect(imageProblemOf('a.svg', 10)).toContain('PNG, JPEG, WebP or GIF')
+    expect(imageProblemOf('C:\\Users\\u\\.ssh\\id_rsa', 10)).toContain('PNG, JPEG, WebP or GIF')
+    expect(imageProblemOf('a.gif', MAX_IMAGE_BYTES + 1)).toContain('2 MB')
   })
 })

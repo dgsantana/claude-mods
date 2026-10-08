@@ -9,7 +9,7 @@
 
 import type { EngineInterface, Register } from 'claude-code'
 import { activityOf } from './activity'
-import { BOARD_TOOL_CALLS, BOARD_TOOLS, type BoardToolName, boardListText, boardToolOf, docLinksLine, tagOutcomeText } from './board'
+import { BOARD_TOOL_CALLS, BOARD_TOOLS, type BoardToolName, boardListText, boardToolOf, docLinksLine, imageFilesOf, imageProblemOf, tagOutcomeText, withImageHashes } from './board'
 import { editedPathOf, type Edit, withEdit } from './edits'
 import { isRecord } from './guards'
 import { type Message, receivedOf, withMessage } from './messages'
@@ -330,7 +330,21 @@ async function runBoardTool($: EngineInterface, tool: BoardToolName, args: Recor
   const where = `/api/boards/${encodeURIComponent(board)}`
   const outline = `${where}/outline${project ? `?project=${encodeURIComponent(project)}` : ''}`
   if (tool === 'board_read') return `${await readBoard($, board, outline)}${ownProject ? `\n\n${docLinksLine(ownProject)}` : ''}`
-  const ops = tool === 'board_comment' ? [{ op: 'comment', id: args.block, text: args.text }] : args.ops
+  // Images go to the hub's store first; the ops then name each by its hash, never by a local path.
+  const hashes: Record<string, string> = {}
+  for (const file of tool === 'board_write' ? imageFilesOf(args.ops) : []) {
+    const named = imageProblemOf(file, 0)
+    if (named) return `Not applied: ${named}.`
+    const read = await $.fs.read(file, { as: 'bytes' })
+    const base64 = typeof read === 'string' ? '' : read.base64
+    const tooBig = imageProblemOf(file, Math.floor((base64.length * 3) / 4) - (base64.match(/=+$/)?.[0].length ?? 0))
+    if (tooBig) return `Not applied: ${tooBig}.`
+    const stored = await hubSend($, 'POST', '/api/images', { base64 })
+    const parsed: unknown = stored.status === 200 ? JSON.parse(stored.text) : undefined
+    if (!isRecord(parsed) || typeof parsed.hash !== 'string') return `Not applied: the image ${file} was not stored: ${stored.status} ${stored.text}`
+    hashes[file] = parsed.hash
+  }
+  const ops = tool === 'board_comment' ? [{ op: 'comment', id: args.block, text: args.text }] : withImageHashes(args.ops, hashes)
   const notify = tool === 'board_comment' && Array.isArray(args.notify) ? args.notify : undefined
   const answer = await hubSend($, 'POST', `${where}/ops`, { ops, author, ...(project ? { project } : {}), ...(notify?.length ? { notify } : {}) })
   if (answer.status !== 200) return `Not applied: ${answer.text}`

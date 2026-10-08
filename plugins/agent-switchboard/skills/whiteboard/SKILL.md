@@ -32,11 +32,15 @@ what goes on it should be worth everyone's attention.
 | `code` | A short snippet worth discussing, with `language` |
 | `checklist` | A plan or a set of steps, ticked as they are done |
 | `link` | A web page, a board page, or a doc in the project |
+| `image` | A screenshot as evidence, or a picture the user should see |
 
 - Keep additions few and purposeful. One block per topic.
 - For a spec, plan or any markdown file in the project, add a `link` block to it rather than copying its
   text: copy the doc-link prefix that `board_read` prints and append the file's path relative to the
   project, with `/` separators. The card then shows the doc itself and stays current.
+- Images: give `file` (a local PNG, JPEG, WebP or GIF, at most 2 MB) and a caption in `text`; the plugin
+  uploads it. Prefer small, cropped images. `board_read` lists each image's stored file: open it with
+  Read to look at it.
 - Mermaid: keep diagrams small (a handful of nodes) and use plain syntax. The board renders them; you only
   see the source back, so if the user says one does not render, simplify it.
 
@@ -50,8 +54,9 @@ what goes on it should be worth everyone's attention.
 ## Comments and tags
 
 - Answer a question in a comment on the block it was asked on, not in a new block.
-- Tag another session with `notify` only when the block concerns it. Each session may prompt another only
-  a few times an hour (3 by default); the result says whether each tag was sent.
+- Tag another session with `notify` (its name, its project for that project's latest session, or its
+  id) only when the block concerns it. Each session may prompt another only a few times an hour (3 by
+  default); the result says whether each tag was sent.
 
 ## The user's blocks
 

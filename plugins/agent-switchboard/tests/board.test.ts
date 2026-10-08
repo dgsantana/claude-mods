@@ -1,12 +1,12 @@
 import type { On } from 'claude-code'
 import { type Engine, expect, mock, test } from 'claude-code/testing'
 
-type Fake = { id: string; usd: number; failWrites: boolean; files: Map<string, string>; settings?: string }
+type Fake = { id: string; usd: number; failWrites: boolean; files: Map<string, string>; bytes: Map<string, string>; settings?: string }
 
 // The world beneath the mod: one session, its spend, an environment and a file system that records
 // writes. On Windows the engine resolves `/home/u` as `D:/home/u`, so paths are compared without it.
 function world(on: On, env: Record<string, string> = { HOME: '/home/u' }) {
-  const fake: Fake = { id: 'sess-1', usd: 0, failWrites: false, files: new Map() }
+  const fake: Fake = { id: 'sess-1', usd: 0, failWrites: false, files: new Map(), bytes: new Map() }
   const clock = mock.clock(on)
   mock.env(on, env)
   on('session.id', () => ({ value: fake.id }))
@@ -20,6 +20,8 @@ function world(on: On, env: Record<string, string> = { HOME: '/home/u' }) {
   on('fs.read', ($, e) => {
     const path = e.path.replace(/\\/g, '/').replace(/^[A-Za-z]:/, '')
     if (fake.settings !== undefined && path.endsWith('/.agent-switchboard/settings.json')) return { value: fake.settings }
+    const base64 = e.as === 'bytes' ? fake.bytes.get(path) : undefined
+    if (base64 !== undefined) return { value: { base64 } }
     const written = fake.files.get(path)
     return written === undefined ? { deny: `ENOENT ${e.path}` } : { value: written }
   })
@@ -368,4 +370,27 @@ test("the snapshot says what the session's latest tool call is doing, and keeps 
   expect(w.snapshot().activity).toMatchObject({ text: 'editing state.ts' })
   await $.tool.call({ tool: 'mcp__agent-switchboard__board_list', tool_use_id: 'b1' } as never)
   expect(w.snapshot().activity).toMatchObject({ text: 'board_list (agent-switchboard)' })
+})
+
+test('an image block with a local file uploads its bytes, then sends only the stored hash', async ($, on) => {
+  const w = world(on)
+  w.fake.bytes.set('/repo/shot.png', 'iVBORw0KGgo=')
+  on('tool.register', ($, e) => ({ value: { tool: `mcp__agent-switchboard__${e.name}` } }))
+  const requests: Array<{ url: string; method: string; body?: unknown }> = []
+  on('http.fetch', ($, e) => {
+    const body = typeof e.init?.body === 'string' ? { body: JSON.parse(e.init.body) as unknown } : {}
+    requests.push({ url: e.url, method: e.init?.method ?? 'GET', ...body })
+    const reply = (text: string) => ({ value: { status: 200, ok: true, headers: {}, text } })
+    if (e.url.endsWith('/api/token')) return reply(JSON.stringify({ token: 't' }))
+    if (e.url.includes('/api/board-for')) return reply(JSON.stringify({ id: 'p-00000001', project: '/repo' }))
+    if (e.url.endsWith('/api/images')) return reply(JSON.stringify({ hash: 'abc123', type: 'png', w: 10, h: 10, bytes: 8 }))
+    return reply('{}')
+  })
+  await $.session.start(START)
+  await $.tool.call({ tool: 'mcp__agent-switchboard__board_write', ops: [{ op: 'addBlock', block: { kind: 'image', file: '/repo/shot.png', text: 'Before' } }] } as never)
+  const upload = requests.find(r => r.method === 'POST' && r.url.endsWith('/api/images'))
+  expect(upload?.body).toEqual({ base64: 'iVBORw0KGgo=' })
+  const ops = requests.find(r => r.method === 'POST' && r.url.endsWith('/ops'))
+  expect(ops?.body).toMatchObject({ ops: [{ op: 'addBlock', block: { kind: 'image', image: 'abc123', text: 'Before' } }] })
+  expect(JSON.stringify(ops?.body)).not.toContain('shot.png')
 })

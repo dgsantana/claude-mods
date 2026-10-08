@@ -116,6 +116,12 @@ project folder the hub knows, the main worktree for a linked worktree), so the m
 the doc's path with `/` separators instead of encoding a Windows path by hand. The hub serves only
 markdown that git tracks, or untracked and not ignored.
 
+Since 0.9.5 an `image` block can be added from a local file: `board_write` takes `file` (PNG, JPEG, WebP
+or GIF, at most 2 MB), reads it with `$.fs.read(file, { as: "bytes" })`, posts it to the hub's image
+store (`POST /api/images`) and sends the ops with the returned hash in place of the path. A plugin's file
+reads do not go through the session's Read permission, so the plugin uploads only files with an image
+extension, and the hub checks the bytes are an image. Any refusal comes back as text and no ops are sent.
+
 The plugin also ships a skill, `agent-switchboard:whiteboard` (`skills/whiteboard/SKILL.md`): short
 guidance on when a board helps, which block for what, placement, arrows, comments and tags, and leaving
 the user's blocks alone. Each tool description points to it; it costs no context until loaded.
