@@ -37,6 +37,7 @@ const OPS_SCHEMA = {
       },
       text: { type: 'string', description: 'For updateBlock.' },
       items: { type: 'array', description: 'For updateBlock on a checklist: the whole list.' },
+      resolved: { type: 'boolean', description: 'For updateBlock: mark handled (true) or reopen (false).' },
       x: { type: 'number' },
       y: { type: 'number' },
       w: { type: 'number' },

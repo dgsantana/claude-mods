@@ -62,3 +62,5 @@ what goes on it should be worth everyone's attention.
 
 - Never rewrite, move or delete a block the user made unless they ask. Add a comment instead.
 - Your own blocks: update them rather than adding near-duplicates; remove them when they are obsolete.
+- A block marked resolved is handled: leave it unless asked. Resolve a block you raised once its issue
+  is handled (`updateBlock` with `resolved: true`).
