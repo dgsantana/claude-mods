@@ -15,7 +15,8 @@ function hub(on: On) {
     const url = new URL(e.url)
     const method = e.init?.method ?? 'GET'
     if (url.pathname === '/api/token') return reply(200, '{"token":"tok"}')
-    if (method !== 'GET' && e.init?.headers?.['x-hub-token'] !== 'tok') return reply(403)
+    // As the hub will once every session sends it: no request but the token's own without the token.
+    if (e.init?.headers?.['x-hub-token'] !== 'tok') return reply(403)
     if (url.pathname === '/api/prompts' && method === 'POST') {
       state.offered.push(JSON.parse(e.init?.body ?? '{}'))
       return reply(204)

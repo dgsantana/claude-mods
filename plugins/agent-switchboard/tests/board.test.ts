@@ -319,7 +319,8 @@ test('the whiteboard tools are registered at start; with no board named they use
     requests.push({ url: e.url, method: e.init?.method ?? 'GET', ...body })
     const reply = (text: string) => ({ value: { status: 200, ok: true, headers: {}, text } })
     if (e.url.endsWith('/api/token')) return reply(JSON.stringify({ token: 't' }))
-    if (e.url.includes('/api/board-for')) return reply(JSON.stringify({ id: 'p-00000001', project: '/repo' }))
+    // The board lookup makes the hub look at a path, so it wants the token like any write.
+    if (e.url.includes('/api/board-for')) return e.init?.headers?.['x-hub-token'] === 't' ? reply(JSON.stringify({ id: 'p-00000001', project: '/repo' })) : { value: { status: 403, ok: false, headers: {}, text: '' } }
     if (e.url.includes('/outline')) return reply('Board "repo", revision 1, 1 blocks')
     return reply('{}')
   })

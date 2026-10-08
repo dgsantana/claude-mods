@@ -33,7 +33,9 @@ function world(on: On, allowPrompting: boolean, written = 'continue with the tes
     return { text: 'Reloaded.' }
   })
   on('http.fetch', ($, e) => {
+    if (e.url.endsWith('/api/token')) return { value: { status: 200, ok: true, headers: {}, text: '{"token":"tok"}' } }
     asked.push(e.url)
+    if (e.init?.headers?.['x-hub-token'] !== 'tok') return { value: { status: 403, ok: false, headers: {}, text: '' } }
     const next = queued
     queued = undefined
     return next === undefined

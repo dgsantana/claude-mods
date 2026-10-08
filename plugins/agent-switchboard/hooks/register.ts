@@ -241,7 +241,7 @@ async function pickUpPrompts($: EngineInterface): Promise<void> {
     while (session && !session.ended && session.phase === 'idle' && session.waiting.length === 0) {
       if (!promptingAllowedOf(await settingsText($))) return
       const asked = await $.clock.now()
-      const response = await $.http.fetch(await hubUrl($, `/api/sessions/${encodeURIComponent(session.sessionId)}/prompts/next`))
+      const response = await hubSend($, 'GET', `/api/sessions/${encodeURIComponent(session.sessionId)}/prompts/next`)
       if (response.status === 204) {
         // The hub holds a round for 25 s; an empty answer at once means it sees the session busy.
         if ((await $.clock.now()) - asked < 1000) await $.clock.sleep(2000)
@@ -279,8 +279,11 @@ async function hubWrite($: EngineInterface, method: 'POST' | 'DELETE', path: str
   return (await hubSend($, method, path, body)).status
 }
 
-/** The same, with the hub's answer: the whiteboard tools return it to the model. */
-async function hubSend($: EngineInterface, method: 'POST' | 'DELETE', path: string, body?: unknown): Promise<{ status: number; text: string }> {
+/**
+ * Any request to the hub but the token's own, with its answer: every one carries the token, since reads
+ * take queued state or make the hub look at a path (omp-board review 2026-10-08, H3 and H4).
+ */
+async function hubSend($: EngineInterface, method: 'GET' | 'POST' | 'DELETE', path: string, body?: unknown): Promise<{ status: number; text: string }> {
   for (let attempt = 0; attempt < 2; attempt++) {
     if (hubToken === undefined || attempt > 0) {
       const answer = await $.http.fetch(await hubUrl($, '/api/token'))
@@ -304,7 +307,7 @@ async function hubSend($: EngineInterface, method: 'POST' | 'DELETE', path: stri
  */
 async function runBoardTool($: EngineInterface, tool: BoardToolName, args: Record<string, unknown>): Promise<string> {
   if (tool === 'board_list') {
-    const list = await $.http.fetch(await hubUrl($, '/api/boards'))
+    const list = await hubSend($, 'GET', '/api/boards')
     return list.status === 200 ? boardListText(list.text) : `Could not list the boards: ${list.status} ${list.text}`
   }
   const state = await current($)
@@ -316,7 +319,7 @@ async function runBoardTool($: EngineInterface, tool: BoardToolName, args: Recor
     return isRecord(parsed) && typeof parsed.id === 'string' ? `Created board ${parsed.id}, "${String(parsed.title ?? args.title)}".` : 'The hub did not name the new board.'
   }
   // This session's project board, and the project the hub knows its folder by (the main worktree).
-  const found = await $.http.fetch(await hubUrl($, `/api/board-for?cwd=${encodeURIComponent(await $.session.cwd())}`))
+  const found = await hubSend($, 'GET', `/api/board-for?cwd=${encodeURIComponent(await $.session.cwd())}`)
   const own: unknown = found.status === 200 ? JSON.parse(found.text) : undefined
   const ownProject = isRecord(own) && typeof own.project === 'string' ? own.project : undefined
   let board = typeof args.board === 'string' && args.board !== '' ? args.board : undefined
@@ -354,7 +357,7 @@ async function runBoardTool($: EngineInterface, tool: BoardToolName, args: Recor
 
 /** A board as text; a failed read says so, rather than handing an error page to the model as the board. */
 async function readBoard($: EngineInterface, board: string, outlinePath: string): Promise<string> {
-  const read = await $.http.fetch(await hubUrl($, outlinePath))
+  const read = await hubSend($, 'GET', outlinePath)
   return read.status === 200 ? read.text : `Could not read board ${board}: ${read.status} ${read.text}`
 }
 
@@ -369,7 +372,7 @@ async function offerToBoard($: EngineInterface, prompt: BoardPrompt): Promise<vo
     if ((await hubWrite($, 'POST', '/api/prompts', prompt)) !== 204) return
     offered.add(id)
     while (boardAnswers.has(id)) {
-      const response = await $.http.fetch(await hubUrl($, `/api/prompts/${encodeURIComponent(id)}/answer`))
+      const response = await hubSend($, 'GET', `/api/prompts/${encodeURIComponent(id)}/answer`)
       if (response.status === 200) {
         boardAnswers.get(id)?.(response.text)
         return

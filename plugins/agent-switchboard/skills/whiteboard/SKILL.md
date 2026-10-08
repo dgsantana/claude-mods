@@ -41,8 +41,9 @@ what goes on it should be worth everyone's attention.
 - Images: give `file` (a local PNG, JPEG, WebP or GIF, at most 2 MB) and a caption in `text`; the plugin
   uploads it. Prefer small, cropped images. `board_read` lists each image's stored file: open it with
   Read to look at it.
-- Mermaid: keep diagrams small (a handful of nodes) and use plain syntax. The board renders them; you only
-  see the source back, so if the user says one does not render, simplify it.
+- Mermaid: keep diagrams small. After writing one, `board_read` shows its render line: fix a failed one
+  from the message; `not drawn yet` means no board page is open to draw it, so ask the user to open the
+  board if it matters.
 
 ## Placement and arrows
 
