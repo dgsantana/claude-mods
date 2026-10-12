@@ -5,10 +5,6 @@ set of instruments around each session, a themed status line above the prompt, T
 AGENTS.md and APPEND_SYSTEM loading, and an edit advisor. Most of it is ported from
 [oh-my-pi](https://github.com/can1357/oh-my-pi) (omp). Described below.
 
-The Agent Switchboard plugin that used to live here has moved to its own repository,
-[agent-switchboard-claude](https://github.com/dgsantana/agent-switchboard-claude), beside the
-switchboard plugins for other agent harnesses.
-
 | Feature | What it does |
 |---|---|
 | APPEND_SYSTEM | Appends your own text to the system prompt, global and per project |

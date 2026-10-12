@@ -31,8 +31,7 @@ cd plugins/agent-cockpit && bunx -p typescript@5.9 tsc -p . --noEmit   # type-ch
 claude --plugin-dir plugins/agent-cockpit        # try it in a session
 ```
 
-All must pass before a commit that touches `plugins/`. The Agent Switchboard plugin lives in its own
-repository, `github.com/dgsantana/agent-switchboard-claude`.
+All must pass before a commit that touches `plugins/`.
 
 ## Hard constraints (enforced by the engine, not style)
 
